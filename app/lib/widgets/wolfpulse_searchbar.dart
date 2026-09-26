@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../services/update_service.dart';
@@ -18,6 +19,42 @@ class _WolfPulseSearchBarState extends State<WolfPulseSearchBar> {
   bool _busy = false;
   List<dynamic> _results = [];
   List<dynamic> _local = [];
+  // Live suggesties zoals Google: tijdens typen alvast zoeken
+  Timer? _debounce;
+  List<dynamic> _suggest = [];
+  bool _suggesting = false;
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _onChanged(String text) {
+    _debounce?.cancel();
+    final q = text.trim();
+    if (q.length < 2 || q.toLowerCase() == 'download') {
+      setState(() {
+        _suggest = [];
+        _suggesting = false;
+      });
+      return;
+    }
+    setState(() => _suggesting = true);
+    _debounce = Timer(const Duration(milliseconds: 450), () async {
+      try {
+        final j = await _api.search(q);
+        if (!mounted || _ctrl.text.trim() != q) return;
+        setState(() {
+          _suggest = ((j['results'] ?? []) as List<dynamic>).take(6).toList();
+          _suggesting = false;
+        });
+      } catch (_) {
+        if (mounted) setState(() => _suggesting = false);
+      }
+    });
+  }
 
   Future<void> _search() async {
     final q = _ctrl.text.trim();
@@ -51,6 +88,7 @@ class _WolfPulseSearchBarState extends State<WolfPulseSearchBar> {
       setState(() {
         _results = (j['results'] ?? []) as List<dynamic>;
         _local = (j['local'] ?? []) as List<dynamic>;
+        _suggest = []; // suggesties weg bij volledige resultaten
       });
     } catch (_) {
       if (mounted) {
@@ -83,6 +121,7 @@ class _WolfPulseSearchBarState extends State<WolfPulseSearchBar> {
                 ),
                 child: TextField(
                   controller: _ctrl,
+                  onChanged: _onChanged,
                   onSubmitted: (_) => _search(),
                   style: const TextStyle(fontSize: 16),
                   decoration: InputDecoration(
@@ -132,9 +171,47 @@ class _WolfPulseSearchBarState extends State<WolfPulseSearchBar> {
                   ),
           ],
         ),
-        if (_results.isNotEmpty)
+        if (_suggesting)
+          const Padding(
+            padding: EdgeInsets.only(top: 8),
+            child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2)),
+          ),
+        if (_suggest.isNotEmpty && _results.isEmpty)
           Container(
-            margin: const EdgeInsets.only(top: 12),
+            margin: const EdgeInsets.only(top: 8),
+            constraints: const BoxConstraints(maxHeight: 260),
+            decoration: BoxDecoration(
+                color: const Color(0xFF0A1428).withValues(alpha: 0.95),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                    color: const Color(0xFF29B6F6).withValues(alpha: 0.4))),
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: _suggest.length,
+              itemBuilder: (ctx, i) {
+                final r = _suggest[i] as Map<String, dynamic>;
+                return ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.search,
+                      size: 18, color: Color(0xFF29B6F6)),
+                  title: Text(r['title']?.toString() ?? '',
+                      maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 14)),
+                  trailing: const Icon(Icons.north_west,
+                      size: 16, color: Colors.white54),
+                  onTap: () {
+                    _ctrl.text = (r['title']?.toString() ?? '').split('—').first.trim();
+                    _search();
+                  },
+                );
+              },
+            ),
+          ),
+        if (_results.isNotEmpty)
+          Container(            margin: const EdgeInsets.only(top: 12),
             constraints: const BoxConstraints(maxHeight: 320),
             decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(16)),
             child: ListView.builder(
