@@ -1,0 +1,4 @@
+[
+  { "keyword": "wolfbos", "title": "Wolfbos Dashboard", "url": "http://192.168.1.42:43711/", "description": "Lokaal dashboard op Mini-PC", "priority": 1000 },
+  { "keyword": "download", "title": "CyberWolfert apps downloaden", "url": "/downloads/CyberWolfert-apps.zip", "description": "Alles-in-1 zip: APK + Windows + uitleg", "priority": 999 }
+]

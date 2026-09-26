@@ -1,0 +1,19 @@
+# Node
+backend/node_modules/
+backend/downloads/
+backend/uploads/
+backend/public/
+backend/config.env
+backend/ai_memory.json
+# Flutter
+app/build/
+app/.dart_tool/
+app/android/.gradle/
+app/ios/Pods/
+# Algemeen
+.DS_Store
+Thumbs.db
+*.log
+dist/
+CyberWolfert.apk
+windows-release/

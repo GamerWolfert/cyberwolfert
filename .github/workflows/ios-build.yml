@@ -1,0 +1,25 @@
+name: ios-build
+# iOS (IPA) kan alleen op macOS gebouwd worden: handmatig via Actions-tab.
+on:
+  workflow_dispatch:
+    inputs:
+      api_base_url:
+        description: 'Publieke API-URL (tunnel)'
+        required: false
+        default: 'http://192.168.1.42:43711/api'
+jobs:
+  ipa:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+        working-directory: app
+      - run: flutter build ipa --release --dart-define=API_BASE_URL=${{ inputs.api_base_url }}
+        working-directory: app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CyberWolfert-ipa
+          path: app/build/ios/ipa/*.ipa

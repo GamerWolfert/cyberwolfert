@@ -1,0 +1,210 @@
+// WolfPulse zoekproxy: eigen links eerst, daarna wereldwijde resultaten.
+// Werkt ALTIJD: DB optioneel, keten SearXNG -> Bing -> DuckDuckGo Lite -> Wikipedia.
+const express = require('express');
+const path = require('path');
+const fs = require('fs');
+const db = require('../db');
+const { log, naamOf } = require('../discord');
+const { effectiveUserId } = require('../auth');
+const router = express.Router();
+
+const UA = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) CyberWolfertBrowser/1.8' };
+
+async function fetchTimeout(url, opts = {}, ms = 9000) {
+  const c = new AbortController();
+  const t = setTimeout(() => c.abort(), ms);
+  try {
+    return await fetch(url, { ...opts, signal: c.signal });
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+function decodeEntities(s) {
+  return String(s || '')
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&#x27;|&apos;/g, "'")
+    .replace(/<[^>]*>/g, '').trim();
+}
+
+async function ddgLite(q) {
+  try {
+    const r = await fetchTimeout(
+      `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(q)}`,
+      { headers: { ...UA, Accept: 'text/html' } },
+      6000
+    );
+    if (!r.ok) return [];
+    const html = await r.text();
+    const out = [];
+    const linkRe = /<a[^>]*rel="nofollow"[^>]*href="([^"]+)"[^>]*>(.*?)<\/a>/gis;
+    const snipRe = /class=['"]snippet['"][^>]*>(.*?)<\/td>/is;
+    let m;
+    while ((m = linkRe.exec(html)) && out.length < 10) {
+      const url = m[1];
+      if (url.startsWith('//duckduckgo.com') || url.includes('duckduckgo.com/y.js')) continue;
+      const title = decodeEntities(m[2]);
+      if (!title || !/^https?:\/\//.test(url)) continue;
+      const tail = html.slice(m.index, m.index + 3000);
+      const sn = snipRe.exec(tail);
+      out.push({ title, url, snippet: decodeEntities(sn ? sn[1] : ''), source: 'duckduckgo' });
+    }
+    return out;
+  } catch (e) {
+    console.warn('[search] ddg failed:', e.message);
+    return [];
+  }
+}
+
+async function wikipedia(q) {
+  for (const lang of ['nl', 'en']) {
+    try {
+      const r = await fetchTimeout(
+        `https://${lang}.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(q)}&limit=5&format=json`,
+        { headers: { ...UA, Accept: 'application/json' } }
+      );
+      if (!r.ok) continue;
+      const j = await r.json();
+      const out = (j[1] || []).map((t, i) => ({
+        title: `${t} — Wikipedia`,
+        url: (j[3] || [])[i] || '',
+        snippet: (j[2] || [])[i] || '',
+        source: 'wikipedia',
+      })).filter((x) => x.url);
+      if (out.length) return out;
+    } catch (e) {
+      console.warn('[search] wiki failed:', e.message);
+    }
+  }
+  return [];
+}
+
+async function globalSearch(q) {
+  if (process.env.SEARXNG_URL) {
+    try {
+      const r = await fetchTimeout(`${process.env.SEARXNG_URL}?q=${encodeURIComponent(q)}&format=json`, {
+        headers: { Accept: 'application/json' },
+      });
+      if (r.ok) {
+        const j = await r.json();
+        const results = (j.results || []).slice(0, 15).map((x) => ({
+          title: x.title, url: x.url,
+          snippet: x.content || x.snippet || '', source: 'searxng',
+        }));
+        if (results.length) return results;
+      }
+    } catch (e) {
+      console.warn('[search] searxng failed:', e.message);
+    }
+  }
+  if (process.env.BING_API_KEY) {
+    try {
+      const r = await fetchTimeout(
+        `${process.env.BING_ENDPOINT}?q=${encodeURIComponent(q)}&count=15&mkt=nl-NL`,
+        { headers: { 'Ocp-Apim-Subscription-Key': process.env.BING_API_KEY } }
+      );
+      const j = await r.json();
+      const results = (j.webPages?.value || []).map((x) => ({
+        title: x.name, url: x.url, snippet: x.snippet, source: 'bing',
+      }));
+      if (results.length) return results;
+    } catch (e) {
+      console.warn('[search] bing failed:', e.message);
+    }
+  }
+  const [ddg, wiki] = await Promise.all([ddgLite(q), wikipedia(q)]);
+  return [...ddg, ...wiki];
+}
+
+function fileLinks(q, req) {
+  try {
+    const f = path.join(__dirname, '..', '..', 'custom_links.json');
+    if (!fs.existsSync(f)) return [];
+    const base = process.env.PUBLIC_URL
+      ? String(process.env.PUBLIC_URL).replace(/\/$/, '')
+      : `${req.protocol}://${req.get('host')}`;
+    const all = JSON.parse(fs.readFileSync(f, 'utf8'));
+    const ql = q.toLowerCase();
+    return all
+      .filter((l) => l.keyword && ql.includes(String(l.keyword).toLowerCase()))
+      .sort((a, b) => (b.priority || 0) - (a.priority || 0))
+      .slice(0, 5)
+      .map((l) => ({
+        title: l.title,
+        url: String(l.url).startsWith('/') ? base + l.url : l.url,
+        snippet: l.description || '',
+        source: 'local',
+      }));
+  } catch {
+    return [];
+  }
+}
+
+async function dbLinks(q, req) {
+  try {
+    const uid = await effectiveUserId(req);
+    if (!uid) return { uid: null, local: [] };
+    try {
+      await db.query('INSERT INTO search_history (user_id, query) VALUES ($1,$2)', [uid, q]);
+    } catch (_) {}
+    const lr = await db.query(
+      `SELECT title, url, description AS snippet, 'local' AS source, priority
+       FROM custom_links WHERE user_id=$1 AND $2 ILIKE '%'||keyword||'%'
+       ORDER BY priority DESC LIMIT 5`,
+      [uid, q]
+    );
+    return { uid, local: lr.rows };
+  } catch {
+    return { uid: null, local: [] };
+  }
+}
+
+router.get('/', async (req, res) => {
+  const q = (req.query.q || '').trim();
+  if (!q) return res.status(400).json({ error: 'missing_q' });
+  const { local: dbLocal, uid } = await dbLinks(q, req);
+  if (uid) log.zoekterm(await naamOf(uid), q);
+  const local = [...dbLocal, ...fileLinks(q, req)];
+  const global = await globalSearch(q);
+  res.json({ query: q, local, results: [...local, ...global] });
+});
+
+router.get('/history', async (req, res) => {
+  try {
+    const uid = await effectiveUserId(req);
+    if (!uid) return res.json([]);
+    const r = await db.query(
+      `SELECT query, created_at FROM search_history
+       WHERE user_id=$1 ORDER BY created_at DESC LIMIT 50`,
+      [uid]
+    );
+    res.json(r.rows);
+  } catch {
+    res.json([]);
+  }
+});
+
+router.post('/links', async (req, res) => {
+  const { keyword, title, url, description, priority } = req.body;
+  if (!keyword || !title || !url) return res.status(400).json({ error: 'missing_fields' });
+  try {
+    const uid = await effectiveUserId(req);
+    if (!uid) throw new Error('no db');
+    const r = await db.query(
+      'INSERT INTO custom_links (user_id,keyword,title,url,description,priority) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
+      [uid, keyword, title, url, description || '', priority || 100]
+    );
+    res.json(r.rows[0]);
+  } catch {
+    const f = path.join(__dirname, '..', '..', 'custom_links.json');
+    const all = fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')) : [];
+    const row = { keyword, title, url, description: description || '', priority: priority || 100 };
+    all.push(row);
+    fs.writeFileSync(f, JSON.stringify(all, null, 2));
+    res.json({ ...row, source: 'file' });
+  }
+});
+
+module.exports = router;
+module.exports.globalSearch = globalSearch;
