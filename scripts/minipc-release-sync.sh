@@ -63,7 +63,8 @@ dl "CyberWolfert.apk" "$BACKEND_DIR/downloads/CyberWolfert.apk" && echo "apk bij
 dl "CyberWolfert-Windows.zip" "$BACKEND_DIR/downloads/CyberWolfert-Windows.zip" && echo "windows bijgewerkt"
 dl "CyberWolfert-apps.zip" "$BACKEND_DIR/downloads/CyberWolfert-apps.zip" && echo "bundle bijgewerkt"
 
-# version.json synchroniseren met release-tag (v1.8.0 -> version/build)
+# version.json synchroniseren met release-tag (alleen versie; build-cijfer
+# blijft van de gepubliceerde app, anders melden apps eeuwig een update)
 VER="$(echo "$TAG" | sed 's/^v//')"
 if [ -n "$VER" ]; then
   python3 - "$BACKEND_DIR/version.json" "$VER" <<'EOF'
@@ -74,12 +75,10 @@ try:
 except Exception:
     j = {}
 j['version'] = ver
-j['build'] = int(j.get('build', 0)) + 1
-j['notes'] = f"Release {ver} via GitHub"
 from datetime import date
 j['updatedAt'] = date.today().isoformat()
 json.dump(j, open(p, 'w'), indent=2)
-print("version.json:", ver, j['build'])
+print("version.json:", ver, "build", j.get('build'))
 EOF
 fi
 
