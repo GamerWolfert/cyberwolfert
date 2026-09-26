@@ -1,9 +1,9 @@
 {
   "app": "CyberWolfert Browser",
-  "version": "1.8.0",
-  "build": 13,
+  "version": "1.8.1",
+  "build": 14,
   "minVersion": "1.0.0",
-  "notes": "Automatisch updaten (Android), nachtwolf-style, groene chats.",
+  "notes": "Echte browser in Windows-app (WebView2), alles intern.",
   "updatedAt": "2026-09-26",
   "iosUrl": ""
 }

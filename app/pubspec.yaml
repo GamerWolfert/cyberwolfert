@@ -1,7 +1,7 @@
 name: cyberwolfert_browser
 description: CyberWolfert Browser met WolfPulse zoekmachine en CyberWolf AI-assistent.
 publish_to: 'none'
-version: 1.8.0+13
+version: 1.8.1+14
 
 environment:
   sdk: '>=3.2.0 <4.0.0'
@@ -13,6 +13,8 @@ dependencies:
   provider: ^6.1.2
   shared_preferences: ^2.2.2
   webview_flutter: ^4.7.0
+  # Ingebedde Edge-browser op Windows (alleen daar gebruikt)
+  webview_windows: ^0.2.1
   image_picker: ^1.0.8
   url_launcher: ^6.2.5
   google_sign_in: ^6.3.0

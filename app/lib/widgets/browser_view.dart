@@ -5,11 +5,13 @@ import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'internal_web.dart';
+import 'windows_webview.dart';
 
-/// Echte CyberWolfert-browser:
+/// Echte CyberWolfert-browser, alles intern:
 /// - Android/iOS/macOS: ingebedde WebView
+/// - Windows: ingebedde Edge WebView2
 /// - Web: intern iframe-blad (direct of via proxy bij framing-blokkade)
-/// - Windows/Linux: systeem-browser
+/// - Linux: systeem-browser (fallback)
 class BrowserView extends StatefulWidget {
   final String url;
   final void Function()? onClose;
@@ -178,6 +180,10 @@ class _BrowserViewState extends State<BrowserView> {
         if (_progress < 100) LinearProgressIndicator(value: _progress / 100, minHeight: 2),
         Expanded(child: WebViewWidget(controller: _ctrl!)),
       ]);
+    }
+    // Windows: ingebedde Edge WebView2 (echte browser, geen doorverwijzing)
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
+      return WindowsBrowserView(key: ValueKey('win-${widget.url}'), url: widget.url);
     }
     return Center(
       child: Padding(
