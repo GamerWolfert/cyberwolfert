@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import '../screens/downloads_screen.dart';
 import '../services/api_service.dart';
+import '../services/download_service.dart';
 import '../services/update_service.dart';
 
 /// WolfPulse-zoekbalk met blauwe gloed. Codewoord "download" -> apps-zip.
@@ -64,11 +67,26 @@ class _WolfPulseSearchBarState extends State<WolfPulseSearchBar> {
       try {
         final url = await UpdateService.bundleUrl();
         if (url != null && mounted) {
-          await UpdateService.openUrl(url);
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('🐺 CyberWolfert-apps.zip wordt gedownload…')));
+          if (kIsWeb) {
+            await DownloadService.download(url); // registreert in lijst
+            await UpdateService.openUrl(url); // browser downloadt bestand
+          } else {
+            await DownloadService.download(url);
           }
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('🐺 CyberWolfert-apps.zip gedownload.'),
+              action: SnackBarAction(
+                label: 'Openen',
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => DownloadsScreen(
+                          onOpenUrl: widget.onOpenUrl))),
+              ),
+            ),
+          );
         } else if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Nog geen downloadbundle beschikbaar.')));

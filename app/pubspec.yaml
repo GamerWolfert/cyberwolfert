@@ -1,7 +1,7 @@
 name: cyberwolfert_browser
 description: CyberWolfert Browser met WolfPulse zoekmachine en CyberWolf AI-assistent.
 publish_to: 'none'
-version: 1.8.2+15
+version: 1.9.0+16
 
 environment:
   sdk: '>=3.2.0 <4.0.0'
@@ -24,6 +24,8 @@ dependencies:
   # Automatisch updaten (Android APK download + installeren)
   path_provider: ^2.1.4
   open_file: ^3.5.10
+  # Startsound bij opstarten
+  audioplayers: ^6.1.0
 
 dev_dependencies:
   flutter_test:
@@ -35,6 +37,8 @@ flutter:
   uses-material-design: true
   assets:
     - assets/logo.png
+    - assets/sound.mp3
+    # assets/night_bg.jpg toevoegen zodra het bestand er is (foto-achtergrond)
     - assets/brands/
 
 flutter_launcher_icons:

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../config/constants.dart';
 import '../providers/settings_provider.dart';
@@ -13,6 +14,8 @@ import '../services/api_service.dart';
 import '../services/update_service.dart';
 import '../services/auto_update.dart';
 import '../services/recent_service.dart';
+import '../services/sound_service.dart';
+import 'downloads_screen.dart';
 import 'login_screen.dart';
 
 class _Tab {
@@ -29,6 +32,22 @@ class _Tab {
   }
 }
 
+class _NewTabIntent extends Intent {
+  const _NewTabIntent();
+}
+
+class _CloseTabIntent extends Intent {
+  const _CloseTabIntent();
+}
+
+class _FocusUrlIntent extends Intent {
+  const _FocusUrlIntent();
+}
+
+class _ReloadIntent extends Intent {
+  const _ReloadIntent();
+}
+
 class BrowserHomeScreen extends StatefulWidget {
   const BrowserHomeScreen({super.key});
 
@@ -38,6 +57,7 @@ class BrowserHomeScreen extends StatefulWidget {
 
 class _BrowserHomeScreenState extends State<BrowserHomeScreen> {
   final _urlCtrl = TextEditingController();
+  final _urlFocus = FocusNode();
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   final _api = ApiService();
   final List<_Tab> _tabs = [_Tab()];
@@ -127,11 +147,42 @@ class _BrowserHomeScreenState extends State<BrowserHomeScreen> {
         _homeToken++;
       });
 
+  void _closeActiveTab() {
+    if (_tabs.length <= 1) {
+      // Laatste tabblad dicht = app sluiten (net als andere browsers)
+      SystemNavigator.pop();
+      return;
+    }
+    _closeTab(_active);
+  }
+
+  void _reloadActive() {
+    final u = _tab.url;
+    if (u != null) {
+      setState(() {
+        _tab.url = null;
+        _homeToken++;
+      });
+      Future.delayed(const Duration(milliseconds: 50), () {
+        if (mounted) _openUrl(u);
+      });
+    } else {
+      setState(() => _homeToken++);
+    }
+  }
+
+  @override
+  void dispose() {
+    _urlCtrl.dispose();
+    _urlFocus.dispose();
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();
+    SoundService.playStartup();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      // Eerst automatisch updaten (Android), anders melding tonen
       final done = await AutoUpdate.checkAndInstall(context);
       if (!done && mounted) UpdateService.checkAndPrompt(context);
     });
@@ -152,6 +203,36 @@ class _BrowserHomeScreenState extends State<BrowserHomeScreen> {
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsProvider>();
+    return Shortcuts(
+      shortcuts: <LogicalKeySet, Intent>{
+        LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.keyT): const _NewTabIntent(),
+        LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.keyW): const _CloseTabIntent(),
+        LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.keyL): const _FocusUrlIntent(),
+        LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.keyR): const _ReloadIntent(),
+        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyT): const _NewTabIntent(),
+        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyW): const _CloseTabIntent(),
+      },
+      child: Actions(
+        actions: <Type, Action<Intent>>{
+          _NewTabIntent: CallbackAction<_NewTabIntent>(onInvoke: (_) => _newTab()),
+          _CloseTabIntent: CallbackAction<_CloseTabIntent>(onInvoke: (_) => _closeActiveTab()),
+          _FocusUrlIntent: CallbackAction<_FocusUrlIntent>(
+              onInvoke: (_) {
+                _urlFocus.requestFocus();
+                _urlCtrl.selection = TextSelection(baseOffset: 0, extentOffset: _urlCtrl.text.length);
+                return null;
+              }),
+          _ReloadIntent: CallbackAction<_ReloadIntent>(onInvoke: (_) => _reloadActive()),
+        },
+        child: Focus(
+          autofocus: true,
+          child: _buildScaffold(settings),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildScaffold(SettingsProvider settings) {
     return Scaffold(
       key: _scaffoldKey,
       appBar: AppBar(
@@ -165,7 +246,13 @@ class _BrowserHomeScreenState extends State<BrowserHomeScreen> {
         ),
         actions: [
           IconButton(icon: const Icon(Icons.home), onPressed: _goHome, tooltip: 'Startpagina'),
-          IconButton(icon: const Icon(Icons.download), onPressed: _downloadApps, tooltip: 'Apps downloaden (zip)'),
+          IconButton(
+              icon: const Icon(Icons.download),
+              tooltip: 'Downloads',
+              onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => DownloadsScreen(onOpenUrl: _openUrl)))),
           _accountButton(),
           IconButton(
             icon: const Icon(Icons.smart_toy),
@@ -185,6 +272,7 @@ class _BrowserHomeScreenState extends State<BrowserHomeScreen> {
                     Expanded(
                       child: TextField(
                         controller: _urlCtrl,
+                        focusNode: _urlFocus,
                         onSubmitted: _submitBar,
                         decoration: const InputDecoration(
                           hintText: 'Voer URL in of zoek via WolfPulse…',

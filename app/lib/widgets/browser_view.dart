@@ -4,8 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import '../services/download_service.dart';
+import '../screens/downloads_screen.dart' show DownloadsScreen;
 import 'internal_web.dart';
 import 'windows_webview.dart';
+import 'wolf_error.dart';
 
 /// Echte CyberWolfert-browser, alles intern:
 /// - Android/iOS/macOS: ingebedde WebView
@@ -32,6 +35,7 @@ class BrowserView extends StatefulWidget {
 class _BrowserViewState extends State<BrowserView> {
   WebViewController? _ctrl;
   int _progress = 0;
+  String? _pageError; // eigen errorpagina i.p.v. andermans browser-tekst
 
   final List<String> _stack = [];
   int _index = -1;
@@ -55,8 +59,47 @@ class _BrowserViewState extends State<BrowserView> {
         ..setJavaScriptMode(JavaScriptMode.unrestricted)
         ..setNavigationDelegate(NavigationDelegate(
           onProgress: (p) => setState(() => _progress = p),
+          onNavigationRequest: (req) {
+            // Bestanden niet in de pagina laden maar downloaden (zoals echte browsers)
+            if (DownloadService.looksLikeFile(req.url)) {
+              _downloadInApp(req.url);
+              return NavigationDecision.prevent;
+            }
+            setState(() => _pageError = null);
+            return NavigationDecision.navigate;
+          },
+          onWebResourceError: (e) {
+            setState(() => _pageError = e.description.isNotEmpty
+                ? e.description
+                : 'De pagina kon niet worden geladen.');
+          },
         ))
         ..loadRequest(Uri.parse(widget.url));
+    }
+  }
+
+  /// Download binnen de app + in de downloadlijst zetten.
+  Future<void> _downloadInApp(String url) async {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Downloaden: ${DownloadService.fileNameOf(url)}…')));
+    try {
+      final e = await DownloadService.download(url);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gedownload: ${e.name}'),
+          action: SnackBarAction(
+            label: 'Openen',
+            onPressed: () => DownloadsScreen.openEntry(context, e),
+          ),
+        ),
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Downloaden is mislukt.')));
+      }
     }
   }
 
@@ -105,6 +148,7 @@ class _BrowserViewState extends State<BrowserView> {
   void didUpdateWidget(covariant BrowserView old) {
     super.didUpdateWidget(old);
     if (old.url == widget.url) return;
+    setState(() => _pageError = null);
     if (kIsWeb) {
       setState(() {
         _push(widget.url);
@@ -176,6 +220,17 @@ class _BrowserViewState extends State<BrowserView> {
       ]);
     }
     if (BrowserView.isMobileEmbedded) {
+      if (_pageError != null) {
+        return WolfErrorView(
+          url: widget.url,
+          detail: _pageError,
+          onRetry: () {
+            setState(() => _pageError = null);
+            _ctrl?.reload();
+          },
+          onHome: () => widget.onClose?.call(),
+        );
+      }
       return Column(children: [
         if (_progress < 100) LinearProgressIndicator(value: _progress / 100, minHeight: 2),
         Expanded(child: WebViewWidget(controller: _ctrl!)),

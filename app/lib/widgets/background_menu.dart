@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../providers/settings_provider.dart';
+import '../services/sound_service.dart';
 
 /// Menu om achtergrond aan te passen (opgeslagen per gebruiker op de backend).
 class BackgroundMenu extends StatefulWidget {
@@ -16,6 +17,15 @@ class BackgroundMenu extends StatefulWidget {
 
 class _BackgroundMenuState extends State<BackgroundMenu> {
   bool _uploading = false;
+  bool _sound = true;
+
+  @override
+  void initState() {
+    super.initState();
+    SoundService.enabled().then((v) {
+      if (mounted) setState(() => _sound = v);
+    });
+  }
 
   Future<void> _pickAndUpload(SettingsProvider s) async {
     final img = await ImagePicker().pickImage(source: ImageSource.gallery);
@@ -70,6 +80,16 @@ class _BackgroundMenuState extends State<BackgroundMenu> {
           trailing: s.backgroundValue == t ? const Icon(Icons.check) : null,
           onTap: () => s.update(type: 'theme', value: t),
         )),
+        const Divider(),
+        SwitchListTile(
+          secondary: const Icon(Icons.volume_up),
+          title: const Text('Startsound'),
+          value: _sound,
+          onChanged: (v) async {
+            await SoundService.setEnabled(v);
+            setState(() => _sound = v);
+          },
+        ),
       ],
     );
   }

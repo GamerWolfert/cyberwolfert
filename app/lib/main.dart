@@ -25,9 +25,11 @@ class CyberWolfertApp extends StatelessWidget {
           title: AppConfig.browserName,
           debugShowCheckedModeBanner: false,
           themeMode: s.theme == 'light' ? ThemeMode.light : ThemeMode.dark,
-          theme: ThemeData(useMaterial3: true, colorSchemeSeed: const Color(0xFF29B6F6)),
+          theme: ThemeData(useMaterial3: true, colorSchemeSeed: s.accent),
           darkTheme: ThemeData.dark(useMaterial3: true).copyWith(
             scaffoldBackgroundColor: const Color(0xFF0B1020),
+            colorScheme: ColorScheme.fromSeed(
+                seedColor: s.accent, brightness: Brightness.dark),
           ),
           home: const BrowserHomeScreen(),
         ),

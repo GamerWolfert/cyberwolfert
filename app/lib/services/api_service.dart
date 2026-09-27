@@ -67,8 +67,22 @@ class ApiService {
             body: jsonEncode({'name': name, 'type': type, 'value': value, 'is_active': active}));
       });
 
-  Future<Map<String, dynamic>> search(String q) => _guard('Zoeken', () async {
-        final r = await http.get(
+  /// Frame-check: kan deze URL ingebed worden ('open'), is proxy nodig
+  /// ('blocked') of is hij onbereikbaar ('na')? null bij verbindingsfout.
+  Future<String?> frameCheck(String url) async {
+    try {
+      final r = await http
+          .get(Uri.parse('$base/frame-check?url=${Uri.encodeComponent(url)}'),
+              headers: await _h())
+          .timeout(const Duration(seconds: 10));
+      if (r.statusCode != 200) return null;
+      return (jsonDecode(r.body) as Map<String, dynamic>)['framing']?.toString();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>> search(String q) => _guard('Zoeken', () async {        final r = await http.get(
             Uri.parse('$base/search?q=${Uri.encodeComponent(q)}'),
             headers: await _h());
         if (r.statusCode != 200) throw Exception('bad status');

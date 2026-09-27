@@ -47,10 +47,41 @@ class SettingsProvider extends ChangeNotifier {
         (backgroundValue.startsWith('http://') || backgroundValue.startsWith('https://'))) {
       bg = Image.network(backgroundValue, fit: BoxFit.cover,
           errorBuilder: (_, __, ___) => Container(color: _hex('#0B1020')));
+    } else if (backgroundType == 'theme') {
+      bg = Container(decoration: BoxDecoration(gradient: themeGradient(backgroundValue)));
     } else {
       bg = Container(color: _hex(backgroundValue));
     }
     return Stack(fit: StackFit.expand, children: [Positioned.fill(child: bg), child]);
+  }
+
+  /// Thema-presets als echte gradients (wolf-night, pulse-red, midnight...).
+  static LinearGradient themeGradient(String name) {
+    switch (name) {
+      case 'pulse-red':
+        return const LinearGradient(
+          begin: Alignment.topCenter, end: Alignment.bottomCenter,
+          colors: [Color(0xFF3D0B16), Color(0xFF12060A), Color(0xFF080304)]);
+      case 'midnight':
+        return const LinearGradient(
+          begin: Alignment.topCenter, end: Alignment.bottomCenter,
+          colors: [Color(0xFF101A33), Color(0xFF070B18), Color(0xFF03040A)]);
+      case 'wolf-dark':
+      default:
+        return const LinearGradient(
+          begin: Alignment.topCenter, end: Alignment.bottomCenter,
+          colors: [Color(0xFF0B1E42), Color(0xFF071026), Color(0xFF040912)]);
+    }
+  }
+
+  Color get accent {
+    try {
+      var h = accentColor.replaceAll('#', '');
+      if (h.length == 6) h = 'FF$h';
+      return Color(int.parse(h, radix: 16));
+    } catch (_) {
+      return const Color(0xFF29B6F6);
+    }
   }
 
   Color _hex(String hex) {

@@ -108,7 +108,24 @@ class _StartPageState extends State<StartPage> {
         );
       },
     );
-    return customImage ? content : NightScape(child: content);
+    // Foto-achtergrond (assets/night_bg.jpg) bovenop het geschilderde
+    // nachtwolf-landschap; ontbreekt de foto, dan zie je het schilderwerk.
+    return customImage
+        ? content
+        : Stack(
+            fit: StackFit.expand,
+            children: [
+              const NightScape(child: SizedBox.expand()),
+              Positioned.fill(
+                child: Image.asset(
+                  'assets/night_bg.jpg',
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                ),
+              ),
+              content,
+            ],
+          );
   }
 
   Widget _center() {
