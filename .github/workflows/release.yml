@@ -19,7 +19,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-        flutter-version: '3.47.5'
+          flutter-version: '3.47.5'
       - run: flutter pub get
         working-directory: app
       - run: flutter build apk --release --dart-define=API_BASE_URL=http://192.168.1.42:43711/api
@@ -36,7 +36,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-        flutter-version: '3.47.5'
+          flutter-version: '3.47.5'
       - run: flutter pub get
         working-directory: app
       - run: flutter build windows --release --dart-define=API_BASE_URL=http://192.168.1.42:43711/api
@@ -54,7 +54,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-        flutter-version: '3.47.5'
+          flutter-version: '3.47.5'
       - run: flutter pub get
         working-directory: app
       - run: flutter build web --release
