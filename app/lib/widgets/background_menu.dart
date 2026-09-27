@@ -32,19 +32,25 @@ class _BackgroundMenuState extends State<BackgroundMenu> {
     if (img == null) return;
     setState(() => _uploading = true);
     try {
-      final url = await s.api.uploadImage(img.path, img.name);
-      await s.api.saveBackground('Eigen upload', 'image', url, true);
-      await s.update(type: 'image', value: url);
-      if (mounted) Navigator.pop(context);
-    } catch (e) {
-      await s.update(type: 'image', value: img.path);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Upload mislukt, lokaal gebruikt.')));
-        Navigator.pop(context);
+      try {
+        final url = await s.api.uploadImage(img.path, img.name);
+        await s.api.saveBackground('Eigen upload', 'image', url, true);
+        await s.update(type: 'image', value: url);
+      } catch (_) {
+        // Backend onbereikbaar: gebruik lokaal pad zodat de UI nooit vastloopt
+        try {
+          await s.update(type: 'image', value: img.path);
+        } catch (_) {}
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text(
+                  'Backend onbereikbaar: achtergrond alleen op dit apparaat gezet.')));
+        }
       }
+      if (mounted) Navigator.pop(context);
+    } finally {
+      if (mounted) setState(() => _uploading = false);
     }
-    setState(() => _uploading = false);
   }
 
   @override
@@ -87,8 +93,49 @@ class _BackgroundMenuState extends State<BackgroundMenu> {
           value: _sound,
           onChanged: (v) async {
             await SoundService.setEnabled(v);
+            if (!mounted) return;
             setState(() => _sound = v);
           },
+        ),
+        ListTile(
+          leading: const Icon(Icons.audio_file),
+          title: const Text('Eigen startsound (mp3)'),
+          subtitle: FutureBuilder<String?>(
+            future: SoundService.customPath(),
+            builder: (ctx, snap) => Text(
+              (snap.data != null && snap.data!.isNotEmpty)
+                  ? 'Eigen: startsound.mp3'
+                  : 'Standaard: yippee',
+              style: const TextStyle(fontSize: 12),
+            ),
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.upload_file, size: 20),
+                tooltip: 'Eigen mp3 kiezen',
+                onPressed: () async {
+                  final name = await SoundService.pickCustom();
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text(name == null
+                          ? 'Geen bestand gekozen.'
+                          : 'Startsound ingesteld: $name')));
+                  setState(() {});
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.restart_alt, size: 20),
+                tooltip: 'Terug naar standaard',
+                onPressed: () async {
+                  await SoundService.clearCustom();
+                  if (!mounted) return;
+                  setState(() {});
+                },
+              ),
+            ],
+          ),
         ),
       ],
     );

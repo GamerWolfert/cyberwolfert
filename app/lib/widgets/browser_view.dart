@@ -35,7 +35,10 @@ class BrowserView extends StatefulWidget {
 class _BrowserViewState extends State<BrowserView> {
   WebViewController? _ctrl;
   int _progress = 0;
-  String? _pageError; // eigen errorpagina i.p.v. andermans browser-tekst
+  String? _pageError;
+  // Audio per tabblad: dempen + volume (mobiel via JS in de pagina)
+  bool _muted = false;
+  double _volume = 1.0; // eigen errorpagina i.p.v. andermans browser-tekst
 
   final List<String> _stack = [];
   int _index = -1;
@@ -59,6 +62,7 @@ class _BrowserViewState extends State<BrowserView> {
         ..setJavaScriptMode(JavaScriptMode.unrestricted)
         ..setNavigationDelegate(NavigationDelegate(
           onProgress: (p) => setState(() => _progress = p),
+          onPageFinished: (_) => _applyAudio(),
           onNavigationRequest: (req) {
             // Bestanden niet in de pagina laden maar downloaden (zoals echte browsers)
             if (DownloadService.looksLikeFile(req.url)) {
@@ -76,6 +80,69 @@ class _BrowserViewState extends State<BrowserView> {
         ))
         ..loadRequest(Uri.parse(widget.url));
     }
+  }
+
+  /// Audio van dit tabblad dempen/zachter zetten (werkt op alle
+  /// video/audio-elementen in de pagina, ook nieuwe na navigatie).
+  Future<void> _applyAudio() async {
+    final c = _ctrl;
+    if (c == null) return;
+    try {
+      await c.runJavaScript(
+          "document.querySelectorAll('video,audio').forEach(m=>{m.muted=${_muted ? 'true' : 'false'};m.volume=$_volume;});");
+    } catch (_) {}
+  }
+
+  void _audioSheet() {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('🔊 Geluid van dit tabblad',
+                    style:
+                        TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                SwitchListTile(
+                  secondary: Icon(
+                      _muted ? Icons.volume_off : Icons.volume_up),
+                  title: Text(_muted ? 'Gedempt' : 'Geluid aan'),
+                  value: _muted,
+                  onChanged: (v) {
+                    setState(() => _muted = v);
+                    setSheet(() {});
+                    _applyAudio();
+                  },
+                ),
+                Row(
+                  children: [
+                    const Icon(Icons.volume_down,
+                        size: 20, color: Colors.white54),
+                    Expanded(
+                      child: Slider(
+                        value: _volume,
+                        onChanged: (v) {
+                          setState(() => _volume = v);
+                          setSheet(() {});
+                          _applyAudio();
+                        },
+                      ),
+                    ),
+                    const Icon(Icons.volume_up,
+                        size: 20, color: Colors.white54),
+                  ],
+                ),
+                Text('${(_volume * 100).toStringAsFixed(0)}%',
+                    style: const TextStyle(color: Colors.white54)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   /// Download binnen de app + in de downloadlijst zetten.
@@ -233,6 +300,32 @@ class _BrowserViewState extends State<BrowserView> {
       }
       return Column(children: [
         if (_progress < 100) LinearProgressIndicator(value: _progress / 100, minHeight: 2),
+        // Mini-werkbalk: terug/vooruit/verversen + geluid per tabblad
+        Material(
+          elevation: 1,
+          child: Row(
+            children: [
+              IconButton(
+                  icon: const Icon(Icons.arrow_back, size: 20),
+                  onPressed: () => _ctrl?.goBack()),
+              IconButton(
+                  icon: const Icon(Icons.arrow_forward, size: 20),
+                  onPressed: () => _ctrl?.goForward()),
+              IconButton(
+                  icon: const Icon(Icons.refresh, size: 20),
+                  onPressed: () => _ctrl?.reload()),
+              const Spacer(),
+              IconButton(
+                icon: Icon(
+                    _muted ? Icons.volume_off : Icons.volume_up,
+                    size: 20,
+                    color: _muted ? Colors.redAccent : null),
+                tooltip: 'Geluid van dit tabblad',
+                onPressed: _audioSheet,
+              ),
+            ],
+          ),
+        ),
         Expanded(child: WebViewWidget(controller: _ctrl!)),
       ]);
     }

@@ -33,6 +33,10 @@ Future<void> deleteFile(String path) async {
   } catch (_) {}
 }
 
+Future<void> copyFile(String from, String to) async {
+  await File(from).copy(to);
+}
+
 Future<bool> fileExists(String path) async {
   try {
     return await File(path).exists();

@@ -20,6 +20,9 @@ class _WindowsBrowserViewState extends State<WindowsBrowserView> {
   bool _ready = false;
   bool _dead = false;
   String _current = '';
+  // Audio per tabblad (via JS in de pagina, net als mobiel)
+  bool _muted = false;
+  double _volume = 1.0;
 
   @override
   void initState() {
@@ -32,8 +35,70 @@ class _WindowsBrowserViewState extends State<WindowsBrowserView> {
       _ctrl.loadUrl(widget.url);
     });
     _ctrl.url.listen((url) {
-      if (mounted && url.isNotEmpty) setState(() => _current = url);
+      if (mounted && url.isNotEmpty) {
+        setState(() => _current = url);
+        _applyAudio();
+      }
     });
+  }
+
+  Future<void> _applyAudio() async {
+    try {
+      await _ctrl.executeScript(
+          "document.querySelectorAll('video,audio').forEach(m=>{m.muted=${_muted ? 'true' : 'false'};m.volume=$_volume;});");
+    } catch (_) {}
+  }
+
+  void _audioSheet() {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('🔊 Geluid van dit tabblad',
+                    style:
+                        TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                SwitchListTile(
+                  secondary: Icon(
+                      _muted ? Icons.volume_off : Icons.volume_up),
+                  title: Text(_muted ? 'Gedempt' : 'Geluid aan'),
+                  value: _muted,
+                  onChanged: (v) {
+                    setState(() => _muted = v);
+                    setSheet(() {});
+                    _applyAudio();
+                  },
+                ),
+                Row(
+                  children: [
+                    const Icon(Icons.volume_down,
+                        size: 20, color: Colors.white54),
+                    Expanded(
+                      child: Slider(
+                        value: _volume,
+                        onChanged: (v) {
+                          setState(() => _volume = v);
+                          setSheet(() {});
+                          _applyAudio();
+                        },
+                      ),
+                    ),
+                    const Icon(Icons.volume_up,
+                        size: 20, color: Colors.white54),
+                  ],
+                ),
+                Text('${(_volume * 100).toStringAsFixed(0)}%',
+                    style: const TextStyle(color: Colors.white54)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _check(String url) async {
@@ -93,6 +158,14 @@ class _WindowsBrowserViewState extends State<WindowsBrowserView> {
               IconButton(
                   icon: const Icon(Icons.refresh),
                   onPressed: () => _ctrl.reload()),
+              IconButton(
+                icon: Icon(
+                    _muted ? Icons.volume_off : Icons.volume_up,
+                    size: 20,
+                    color: _muted ? Colors.redAccent : null),
+                tooltip: 'Geluid van dit tabblad',
+                onPressed: _audioSheet,
+              ),
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.all(8),

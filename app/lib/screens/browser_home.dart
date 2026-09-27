@@ -19,6 +19,8 @@ import 'downloads_screen.dart';
 import 'login_screen.dart';
 
 class _Tab {
+  static int _nextId = 0;
+  final int id = _nextId++;
   String? url;
   _Tab();
   String get title {
@@ -333,13 +335,9 @@ class _BrowserHomeScreenState extends State<BrowserHomeScreen> {
         ),
       ),
       endDrawer: const Drawer(width: 360, child: CyberWolfPanel()),
-      body: settings.buildBackground(
-        child: _tab.url != null
-            ? _buildWebView(_tab.url!)
-            : (_barResults != null || _searching
-                ? _buildResults()
-                : _buildStartPage()),
-      ),
+      // IndexedStack: alle tabs blijven leven (geluid/video loopt door
+      // bij wisselen, webviews worden niet opnieuw opgebouwd)
+      body: settings.buildBackground(child: _buildBody()),
       floatingActionButton: _tab.url != null
           ? null
           : FloatingActionButton.extended(
@@ -467,7 +465,43 @@ class _BrowserHomeScreenState extends State<BrowserHomeScreen> {
     return StartPage(key: ValueKey(_homeToken), onOpenUrl: _openUrl);
   }
 
-  Widget _buildWebView(String url) {
+  /// Alle webviews blijven gemount (IndexedStack): geluid/video loopt door
+  /// bij het wisselen van tabblad. Startpagina/resultaten liggen erbovenop.
+  Widget _buildBody() {
+    final urlTabs = <int>[];
+    for (var i = 0; i < _tabs.length; i++) {
+      if (_tabs[i].url != null) urlTabs.add(i);
+    }
+    if (_tab.url == null) {
+      return Stack(
+        children: [
+          Visibility(
+            visible: false,
+            maintainState: true,
+            maintainAnimation: true,
+            maintainSize: false,
+            child: _buildTabsStack(urlTabs, 0),
+          ),
+          (_barResults != null || _searching
+              ? _buildResults()
+              : _buildStartPage()),
+        ],
+      );
+    }
+    return _buildTabsStack(urlTabs, urlTabs.indexOf(_active));
+  }
+
+  Widget _buildTabsStack(List<int> urlTabs, int visiblePos) {
+    if (urlTabs.isEmpty) return const SizedBox.shrink();
+    return IndexedStack(
+      index: visiblePos < 0 ? 0 : visiblePos,
+      children: [
+        for (final i in urlTabs) _buildWebView(_tabs[i].url!, i),
+      ],
+    );
+  }
+
+  Widget _buildWebView(String url, [int? tabIndex]) {
     return Column(
       children: [
         Material(
@@ -485,7 +519,8 @@ class _BrowserHomeScreenState extends State<BrowserHomeScreen> {
         ),
         Expanded(
             child: BrowserView(
-                key: ValueKey('tab$_active-$url'),
+                // Stabiele key per tabblad: webview (en geluid) blijft leven
+                key: ValueKey('webview-${tabIndex ?? _active}'),
                 url: url,
                 onClose: _goHome)),
       ],
