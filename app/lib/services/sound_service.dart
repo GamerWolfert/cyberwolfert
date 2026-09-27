@@ -32,8 +32,9 @@ class SoundService {
   static Future<String?> pickCustom() async {
     if (kIsWeb) return null;
     try {
-      final res = await FilePicker.platform.pickFiles(type: FileType.audio);
-      final src = res?.files.single.path;
+      // file_picker v13+: geeft direct een lijst terug
+      final files = await FilePicker.pickFiles(type: FileType.audio);
+      final src = files.isNotEmpty ? files.first.path : null;
       if (src == null) return null;
       final dir = await getApplicationDocumentsDirectory();
       final dest = '${dir.path}/startsound.mp3';

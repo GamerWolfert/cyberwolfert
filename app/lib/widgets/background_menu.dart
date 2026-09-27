@@ -116,9 +116,10 @@ class _BackgroundMenuState extends State<BackgroundMenu> {
                 icon: const Icon(Icons.upload_file, size: 20),
                 tooltip: 'Eigen mp3 kiezen',
                 onPressed: () async {
+                  final messenger = ScaffoldMessenger.of(context);
                   final name = await SoundService.pickCustom();
                   if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  messenger.showSnackBar(SnackBar(
                       content: Text(name == null
                           ? 'Geen bestand gekozen.'
                           : 'Startsound ingesteld: $name')));
