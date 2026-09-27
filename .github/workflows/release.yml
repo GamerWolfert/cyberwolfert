@@ -84,4 +84,5 @@ jobs:
             CyberWolfert-Windows.zip
             CyberWolfert-web.zip
             CyberWolfert-apps.zip
+            backend/version.json
           body: CyberWolfert ${{ github.ref_name }} — APK, Windows, web en alles-in-1 bundle.

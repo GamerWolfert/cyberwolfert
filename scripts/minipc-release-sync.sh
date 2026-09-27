@@ -63,24 +63,8 @@ dl "CyberWolfert.apk" "$BACKEND_DIR/downloads/CyberWolfert.apk" && echo "apk bij
 dl "CyberWolfert-Windows.zip" "$BACKEND_DIR/downloads/CyberWolfert-Windows.zip" && echo "windows bijgewerkt"
 dl "CyberWolfert-apps.zip" "$BACKEND_DIR/downloads/CyberWolfert-apps.zip" && echo "bundle bijgewerkt"
 
-# version.json synchroniseren met release-tag (alleen versie; build-cijfer
-# blijft van de gepubliceerde app, anders melden apps eeuwig een update)
-VER="$(echo "$TAG" | sed 's/^v//')"
-if [ -n "$VER" ]; then
-  python3 - "$BACKEND_DIR/version.json" "$VER" <<'EOF'
-import json, sys
-p, ver = sys.argv[1], sys.argv[2]
-try:
-    j = json.load(open(p))
-except Exception:
-    j = {}
-j['version'] = ver
-from datetime import date
-j['updatedAt'] = date.today().isoformat()
-json.dump(j, open(p, 'w'), indent=2)
-print("version.json:", ver, "build", j.get('build'))
-EOF
-fi
+# version.json is een release-asset (één bron van waarheid: repo backend/version.json)
+dl "version.json" "$BACKEND_DIR/version.json" && echo "versie bijgewerkt"
 
 echo "$TAG" > "$STATE"
 # Discord-melding via backend-log-API
