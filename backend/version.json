@@ -1,9 +1,9 @@
 {
-  "app": "CyberWolfert Browser",
-  "version": "2.0.0",
-  "build": 18,
-  "minVersion": "1.0.0",
-  "notes": "WolfSyn community, e-mail login met verificatie, apparaat-ban, profielen.",
-  "updatedAt": "2026-09-27",
-  "iosUrl": ""
+    "app":  "CyberWolfert Browser",
+    "version":  "2.1.0",
+    "build":  19,
+    "minVersion":  "1.0.0",
+    "notes":  "Admin-paneel met 80+ opties, gebruikersbeheer, Google-like zoekpagina, gast-login poort, achtergrond per account.",
+    "updatedAt":  "2026-09-28",
+    "iosUrl":  ""
 }

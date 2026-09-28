@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:provider/provider.dart';
 import '../config/constants.dart';
 import '../providers/auth_provider.dart';
+import '../providers/settings_provider.dart';
 import '../widgets/app_logo.dart';
 import '../widgets/made_by.dart';
 
@@ -19,24 +21,55 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _register = false;
   final _user = TextEditingController();
   final _pass = TextEditingController();
+  final _pass2 = TextEditingController();
   final _display = TextEditingController();
   final _email = TextEditingController();
   bool _remember = true;
   String? _error;
   bool _busy = false;
 
+  // Gebruikersnaam altijd klein (ook met Shift/Caps aan)
+  static final _lower = TextInputFormatter.withFunction(
+      (oldV, newV) => newV.copyWith(text: newV.text.toLowerCase()));
+
   Future<void> _submit() async {
     final auth = context.read<AuthProvider>();
+    final user = _user.text.trim().toLowerCase();
+    if (_register) {
+      if (_display.text.trim().isEmpty) {
+        setState(() => _error = 'Vul een weergavenaam in.');
+        return;
+      }
+      if (user.length < 3) {
+        setState(() => _error = 'Gebruikersnaam minimaal 3 tekens.');
+        return;
+      }
+      if (_pass.text.length < 6) {
+        setState(() => _error = 'Wachtwoord minimaal 6 tekens.');
+        return;
+      }
+      if (_pass.text != _pass2.text) {
+        setState(() => _error = 'Wachtwoorden komen niet overeen.');
+        return;
+      }
+      if (!_email.text.contains('@')) {
+        setState(() => _error = 'Vul een geldig e-mailadres in.');
+        return;
+      }
+    } else if (_pass.text.isEmpty) {
+      setState(() => _error = 'Vul je wachtwoord in.');
+      return;
+    }
     setState(() {
       _busy = true;
       _error = null;
     });
     final device = await AuthProvider.deviceId();
     final err = _register
-        ? await auth.register(_user.text.trim(), _pass.text,
-            _display.text.trim(), _email.text.trim(), device, _remember)
-        : await auth.login(
-            _user.text.trim(), _pass.text, device, _remember);
+        ? await auth.register(
+            user, _pass.text, _display.text.trim(), _email.text.trim(), device, _remember)
+        : await auth.login(user, _pass.text, device, _remember);
+    if (!mounted) return;
     setState(() => _busy = false);
     if (err != null) {
       setState(() => _error = err);
@@ -46,6 +79,7 @@ class _LoginScreenState extends State<LoginScreen> {
             content: Text(
                 'Account gemaakt! Check je e-mail om te bevestigen.')));
       }
+      context.read<SettingsProvider>().load();
       Navigator.pop(context, true);
     }
   }
@@ -118,23 +152,39 @@ class _LoginScreenState extends State<LoginScreen> {
               if (_register) const SizedBox(height: 12),
               TextField(
                 controller: _user,
+                textInputAction: TextInputAction.next,
+                inputFormatters: [_lower],
                 decoration: const InputDecoration(
-                    labelText: 'Gebruikersnaam of e-mailadres',
+                    labelText: 'Gebruikersnaam (kleine letters)',
                     border: OutlineInputBorder()),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: _pass,
                 obscureText: true,
-                onSubmitted: (_) => _submit(),
+                textInputAction:
+                    _register ? TextInputAction.next : TextInputAction.done,
+                onSubmitted: (_) => _register ? null : _submit(),
                 decoration: const InputDecoration(
                     labelText: 'Wachtwoord', border: OutlineInputBorder()),
               ),
               if (_register) ...[
                 const SizedBox(height: 12),
                 TextField(
+                  controller: _pass2,
+                  obscureText: true,
+                  textInputAction: TextInputAction.next,
+                  onSubmitted: (_) => _submit(),
+                  decoration: const InputDecoration(
+                      labelText: 'Wachtwoord bevestigen',
+                      border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 12),
+                TextField(
                   controller: _email,
                   keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _submit(),
                   decoration: const InputDecoration(
                       labelText: 'E-mailadres (voor bevestiging)',
                       border: OutlineInputBorder()),

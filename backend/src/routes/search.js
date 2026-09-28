@@ -80,24 +80,62 @@ async function wikipedia(q) {
   return [];
 }
 
-async function globalSearch(q) {
-  if (process.env.SEARXNG_URL) {
-    try {
-      const r = await fetchTimeout(`${process.env.SEARXNG_URL}?q=${encodeURIComponent(q)}&format=json`, {
-        headers: { Accept: 'application/json' },
-      });
-      if (r.ok) {
-        const j = await r.json();
-        const results = (j.results || []).slice(0, 15).map((x) => ({
-          title: x.title, url: x.url,
-          snippet: x.content || x.snippet || '', source: 'searxng',
-        }));
-        if (results.length) return results;
-      }
-    } catch (e) {
-      console.warn('[search] searxng failed:', e.message);
-    }
+async function searxInstance(base, q) {
+  try {
+    const sep = base.includes('?') ? '&' : '?';
+    const r = await fetchTimeout(`${base}${sep}q=${encodeURIComponent(q)}&format=json`, {
+      headers: { Accept: 'application/json' },
+    }, 7000);
+    if (!r.ok) return [];
+    const j = await r.json();
+    return (j.results || []).slice(0, 15).map((x) => ({
+      title: x.title, url: x.url,
+      snippet: x.content || x.snippet || '', source: 'searxng',
+    }));
+  } catch (e) {
+    return [];
   }
+}
+
+// Gratis publieke SearXNG-instanties (roteren tot er een werkt, geen key nodig)
+const PUBLIC_SEARX = [
+  'https://searx.be/search',
+  'https://search.rhscz.eu/search',
+  'https://opnxng.xyz/search',
+];
+
+async function braveSearch(q) {
+  if (!process.env.BRAVE_API_KEY) return [];
+  try {
+    const r = await fetchTimeout(
+      `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(q)}&count=15&text_decorations=0&search_lang=nl`,
+      { headers: { Accept: 'application/json', 'X-Subscription-Token': process.env.BRAVE_API_KEY } },
+      8000
+    );
+    if (!r.ok) return [];
+    const j = await r.json();
+    return ((j.web && j.web.results) || []).map((x) => ({
+      title: x.title, url: x.url, snippet: x.description || '', source: 'brave',
+    }));
+  } catch (e) {
+    console.warn('[search] brave failed:', e.message);
+    return [];
+  }
+}
+
+async function globalSearch(q) {
+  // 1) Eigen SearXNG op Mini-PC
+  if (process.env.SEARXNG_URL) {
+    const own = await searxInstance(process.env.SEARXNG_URL, q);
+    if (own.length) return own;
+  }
+  // 2) Brave API (gratis tier, key in config.env) + eigen SearXNG parallel
+  const [brave, ...publics] = await Promise.all([
+    braveSearch(q),
+    ...PUBLIC_SEARX.map((u) => searxInstance(u, q)),
+  ]);
+  const best = brave.length ? brave : publics.find((r) => r.length) || [];
+  if (best.length) return best;
   if (process.env.BING_API_KEY) {
     try {
       const r = await fetchTimeout(

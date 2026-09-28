@@ -15,7 +15,7 @@ const systemRouter = require('./routes/system');
 const proxyRouter = require('./routes/proxy');
 const authRouter = require('./routes/auth');
 const wolfsynRouter = require('./routes/wolfsyn');
-const wolfsynRouter = require('./routes/wolfsyn');
+const adminRouter = require('./routes/admin');
 const { authOptional } = require('./auth');
 const { pool } = require('./db');
 
@@ -80,7 +80,7 @@ app.get('/api/health', async (req, res) => {
 });
 app.use('/api/auth', authRouter);
 app.use('/api/wolf', wolfsynRouter);
-app.use('/api/wolf', wolfsynRouter);
+app.use('/api/admin', adminRouter);
 app.use('/api', authOptional);
 app.use('/api/settings', settingsRouter);
 app.use('/api/search', searchRouter);

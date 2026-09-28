@@ -10,7 +10,6 @@ import '../widgets/browser_view.dart';
 import '../widgets/app_logo.dart';
 import '../widgets/made_by.dart';
 import '../widgets/startpage/start_page.dart';
-import '../services/api_service.dart';
 import '../services/update_service.dart';
 import '../services/auto_update.dart';
 import '../services/recent_service.dart';
@@ -18,6 +17,8 @@ import '../services/sound_service.dart';
 import 'downloads_screen.dart';
 import 'login_screen.dart';
 import 'wolfsyn_screen.dart';
+import 'search_results_screen.dart';
+import 'admin_screen.dart';
 
 class _Tab {
   static int _nextId = 0;
@@ -62,12 +63,10 @@ class _BrowserHomeScreenState extends State<BrowserHomeScreen> {
   final _urlCtrl = TextEditingController();
   final _urlFocus = FocusNode();
   final _scaffoldKey = GlobalKey<ScaffoldState>();
-  final _api = ApiService();
   final List<_Tab> _tabs = [_Tab()];
   int _active = 0;
   int _homeToken = 0;
-  List<dynamic>? _barResults;
-  bool _searching = false;
+  bool _gateShown = false;
 
   static final _urlRe = RegExp(r'^(https?://)?[^\s]+\.[a-z]{2,}(/.*)?$', caseSensitive: false);
 
@@ -79,7 +78,6 @@ class _BrowserHomeScreenState extends State<BrowserHomeScreen> {
     RecentService.add(u);
     setState(() {
       _tab.url = u;
-      _barResults = null;
       _urlCtrl.text = u;
     });
   }
@@ -88,7 +86,6 @@ class _BrowserHomeScreenState extends State<BrowserHomeScreen> {
     setState(() {
       _tabs.add(_Tab());
       _active = _tabs.length - 1;
-      _barResults = null;
       _urlCtrl.clear();
       _homeToken++;
     });
@@ -99,7 +96,6 @@ class _BrowserHomeScreenState extends State<BrowserHomeScreen> {
       _tabs.removeAt(i);
       if (_tabs.isEmpty) _tabs.add(_Tab());
       if (_active >= _tabs.length) _active = _tabs.length - 1;
-      _barResults = null;
       _urlCtrl.text = _tab.url ?? '';
       _homeToken++;
     });
@@ -108,7 +104,6 @@ class _BrowserHomeScreenState extends State<BrowserHomeScreen> {
   void _switchTab(int i) {
     setState(() {
       _active = i;
-      _barResults = null;
       _urlCtrl.text = _tab.url ?? '';
       _homeToken++;
     });
@@ -125,28 +120,19 @@ class _BrowserHomeScreenState extends State<BrowserHomeScreen> {
       _openUrl(t);
       return;
     }
-    setState(() {
-      _searching = true;
-      _tab.url = null;
-      _barResults = null;
-    });
-    try {
-      final j = await _api.search(t);
-      if (!mounted) return;
-      setState(() => _barResults = (j['results'] ?? []) as List<dynamic>);
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Zoeken is mislukt. Controleer de verbinding.')));
-      }
-    }
-    if (mounted) setState(() => _searching = false);
+    if (!mounted) return;
+    _urlCtrl.clear();
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SearchResultsScreen(query: t, onOpenUrl: _openUrl),
+      ),
+    );
   }
 
   void _goHome() => setState(() {
         _tab.url = null;
         _urlCtrl.clear();
-        _barResults = null;
         _homeToken++;
       });
 
@@ -186,9 +172,71 @@ class _BrowserHomeScreenState extends State<BrowserHomeScreen> {
     super.initState();
     SoundService.playStartup();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _maybeLoginGate();
+      if (!mounted) return;
       final done = await AutoUpdate.checkAndInstall(context);
       if (!done && mounted) UpdateService.checkAndPrompt(context);
     });
+  }
+
+  /// Start scherm: eerst vragen om in te loggen (gast mag ook verder).
+  Future<void> _maybeLoginGate() async {
+    if (_gateShown) return;
+    _gateShown = true;
+    final auth = context.read<AuthProvider>();
+    for (var i = 0; i < 20 && auth.loading && mounted; i++) {
+      await Future.delayed(const Duration(milliseconds: 150));
+    }
+    if (!mounted || auth.loggedIn) return;
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const AppLogo(size: 76),
+            const SizedBox(height: 14),
+            const Text('Welkom bij CyberWolfert',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 6),
+            const Text(
+              'Log in om je eigen achtergrond, geschiedenis en AI-geheugen te gebruiken.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: Colors.white70),
+            ),
+            const SizedBox(height: 18),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                icon: const Icon(Icons.login),
+                label: const Text('Inloggen / account maken'),
+                onPressed: () {
+                  final nav = Navigator.of(ctx);
+                  nav.pop();
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  ).then((_) {
+                    if (!mounted) return;
+                    context.read<SettingsProvider>().load();
+                  });
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Verder als gast'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (mounted) context.read<SettingsProvider>().load();
   }
 
   Future<void> _downloadApps() async {
@@ -249,6 +297,15 @@ class _BrowserHomeScreenState extends State<BrowserHomeScreen> {
         ),
         actions: [
           IconButton(icon: const Icon(Icons.home), onPressed: _goHome, tooltip: 'Startpagina'),
+          if (context.watch<AuthProvider>().user?['is_admin'] == true)
+            IconButton(
+              icon: const Icon(Icons.admin_panel_settings),
+              tooltip: 'Admin Panel',
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AdminScreen()),
+              ),
+            ),
           IconButton(
               icon: const Icon(Icons.download),
               tooltip: 'Downloads',
@@ -431,45 +488,6 @@ class _BrowserHomeScreenState extends State<BrowserHomeScreen> {
     );
   }
 
-  Widget _buildResults() {
-    if (_searching) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    final results = _barResults ?? [];
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 720),
-        child: ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: results.length + 1,
-          itemBuilder: (ctx, i) {
-            if (i == 0) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Text('🐺 ${results.length} resultaten via WolfPulse',
-                    style: const TextStyle(fontWeight: FontWeight.bold)),
-              );
-            }
-            final r = results[i - 1] as Map<String, dynamic>;
-            return Card(
-              child: ListTile(
-                leading: Icon(
-                    (r['source'] == 'local') ? Icons.star : Icons.public,
-                    color: (r['source'] == 'local')
-                        ? Colors.amber
-                        : const Color(0xFF29B6F6)),
-                title: Text(r['title']?.toString() ?? ''),
-                subtitle: Text(r['snippet']?.toString() ?? '',
-                    maxLines: 2, overflow: TextOverflow.ellipsis),
-                onTap: () => _openUrl(r['url'].toString()),
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
-
   Widget _buildStartPage() {
     return StartPage(key: ValueKey(_homeToken), onOpenUrl: _openUrl);
   }
@@ -491,9 +509,7 @@ class _BrowserHomeScreenState extends State<BrowserHomeScreen> {
             maintainSize: false,
             child: _buildTabsStack(urlTabs, 0),
           ),
-          (_barResults != null || _searching
-              ? _buildResults()
-              : _buildStartPage()),
+          _buildStartPage(),
         ],
       );
     }

@@ -155,6 +155,44 @@ CREATE TABLE IF NOT EXISTS ai_memory (
 );
 CREATE INDEX IF NOT EXISTS idx_ai_memory_user ON ai_memory(user_id);
 
+-- 8. Site-rollen met permissies (admin-paneel)
+CREATE TABLE IF NOT EXISTS site_roles (
+  name VARCHAR(48) PRIMARY KEY,
+  permissions JSONB NOT NULL DEFAULT '{}'
+);
+CREATE TABLE IF NOT EXISTS site_user_roles (
+  user_id INT REFERENCES users(id) ON DELETE CASCADE,
+  role_name VARCHAR(48) REFERENCES site_roles(name) ON DELETE CASCADE,
+  PRIMARY KEY (user_id, role_name)
+);
+CREATE TABLE IF NOT EXISTS site_user_perms (
+  user_id INT REFERENCES users(id) ON DELETE CASCADE,
+  perm VARCHAR(64) NOT NULL,
+  allow BOOLEAN NOT NULL DEFAULT TRUE,
+  PRIMARY KEY (user_id, perm)
+);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE;
+
+-- 9. Login/register-gebeurtenissen (live logs)
+CREATE TABLE IF NOT EXISTS auth_events (
+  id SERIAL PRIMARY KEY,
+  user_id INT REFERENCES users(id) ON DELETE SET NULL,
+  username VARCHAR(64),
+  kind VARCHAR(32) NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_auth_events_time ON auth_events(created_at DESC);
+
+-- 10. Site-instellingen (mededeling op startpagina)
+CREATE TABLE IF NOT EXISTS site_settings (
+  key VARCHAR(64) PRIMARY KEY,
+  value TEXT DEFAULT ''
+);
+INSERT INTO site_settings (key, value) VALUES ('announcement', '')
+ON CONFLICT (key) DO NOTHING;
+INSERT INTO site_roles (name, permissions) VALUES ('user', '{}')
+ON CONFLICT (name) DO NOTHING;
+
 INSERT INTO users (username) VALUES ('wolfert') ON CONFLICT (username) DO NOTHING;
 INSERT INTO user_settings (user_id, theme, background_type, background_value)
 SELECT id, 'dark', 'color', '#0B1020' FROM users WHERE username='wolfert'

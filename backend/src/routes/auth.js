@@ -24,8 +24,18 @@ function publicUser(row) {
     avatar: row.avatar_url || null,
     email: row.email || null,
     emailVerified: !!row.email_verified,
+    is_admin: !!row.is_admin,
     provider: row.google_id ? 'google' : 'cyberwolfert',
   };
+}
+
+async function authEvent(userId, username, kind) {
+  try {
+    await db.query(
+      'INSERT INTO auth_events (user_id, username, kind) VALUES ($1,$2,$3)',
+      [userId, username, kind]
+    );
+  } catch (_) {}
 }
 
 function tokenFor(userId, remember) {
@@ -85,6 +95,7 @@ router.post('/register', async (req, res) => {
     await mails.accountAangemaakt(email, user.displayName, verifyUrl, reportUrl);
     await trackDevice(user.id, deviceId, deviceLabel);
     log.login(user.username, 'cyberwolfert-register');
+    authEvent(user.id, user.username, 'register');
     res.json({ token: tokenFor(user.id, remember), user });
   } catch (e) {
     console.error(e);
@@ -171,6 +182,7 @@ router.post('/login', async (req, res) => {
     }
     const user = publicUser(row);
     log.login(user.username, 'cyberwolfert-login');
+    authEvent(user.id, user.username, 'login');
     res.json({ token: tokenFor(user.id, remember), user });
   } catch (e) {
     console.error(e);

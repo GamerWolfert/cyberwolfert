@@ -10,15 +10,40 @@ void main() {
 }
 
 /// Root van de CyberWolfert Browser.
-class CyberWolfertApp extends StatelessWidget {
+class CyberWolfertApp extends StatefulWidget {
   const CyberWolfertApp({super.key});
+
+  @override
+  State<CyberWolfertApp> createState() => _CyberWolfertAppState();
+}
+
+class _CyberWolfertAppState extends State<CyberWolfertApp> {
+  final AuthProvider auth = AuthProvider();
+  final SettingsProvider settings = SettingsProvider();
+
+  @override
+  void initState() {
+    super.initState();
+    // Eerst inloggen, dán instellingen laden: anders wordt de achtergrond
+    // van de gast-laag geladen en lijkt hij bij elke herstart weg.
+    auth.load().then((_) {
+      if (mounted) settings.load();
+    });
+  }
+
+  @override
+  void dispose() {
+    auth.dispose();
+    settings.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => SettingsProvider()..load()),
-        ChangeNotifierProvider(create: (_) => AuthProvider()..load()),
+        ChangeNotifierProvider.value(value: auth),
+        ChangeNotifierProvider.value(value: settings),
       ],
       child: Consumer<SettingsProvider>(
         builder: (ctx, s, _) => MaterialApp(
