@@ -17,6 +17,7 @@ import '../services/recent_service.dart';
 import '../services/sound_service.dart';
 import 'downloads_screen.dart';
 import 'login_screen.dart';
+import 'wolfsyn_screen.dart';
 
 class _Tab {
   static int _nextId = 0;
@@ -260,6 +261,14 @@ class _BrowserHomeScreenState extends State<BrowserHomeScreen> {
             icon: const Icon(Icons.smart_toy),
             tooltip: AppConfig.aiName,
             onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
+          ),
+          IconButton(
+            icon: const Icon(Icons.groups),
+            tooltip: 'WolfSyn',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const WolfSynScreen()),
+            ),
           ),
         ],
         bottom: PreferredSize(

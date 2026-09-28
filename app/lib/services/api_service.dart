@@ -82,7 +82,48 @@ class ApiService {
     }
   }
 
-  Future<Map<String, dynamic>> search(String q) => _guard('Zoeken', () async {        final r = await http.get(
+  // --- Generiek (voor WolfSyn e.a.) ---
+  Future<dynamic> apiGet(String path) => _guard('Laden', () async {
+        final r = await http.get(Uri.parse('$base$path'), headers: await _h());
+        if (r.statusCode != 200) throw Exception(_apiFout(r.body));
+        return jsonDecode(r.body);
+      });
+
+  Future<dynamic> apiPost(String path, [Map<String, dynamic>? body]) =>
+      _guard('Versturen', () async {
+        final r = await http.post(Uri.parse('$base$path'),
+            headers: await _h(json: true), body: jsonEncode(body ?? {}));
+        if (r.statusCode != 200 && r.statusCode != 201) {
+          throw Exception(_apiFout(r.body));
+        }
+        return r.body.isEmpty ? {} : jsonDecode(r.body);
+      });
+
+  Future<dynamic> apiPut(String path, [Map<String, dynamic>? body]) =>
+      _guard('Opslaan', () async {
+        final r = await http.put(Uri.parse('$base$path'),
+            headers: await _h(json: true), body: jsonEncode(body ?? {}));
+        if (r.statusCode != 200) throw Exception(_apiFout(r.body));
+        return r.body.isEmpty ? {} : jsonDecode(r.body);
+      });
+
+  Future<dynamic> apiDelete(String path) => _guard('Verwijderen', () async {
+        final r =
+            await http.delete(Uri.parse('$base$path'), headers: await _h());
+        if (r.statusCode != 200) throw Exception(_apiFout(r.body));
+        return r.body.isEmpty ? {} : jsonDecode(r.body);
+      });
+
+  String _apiFout(String body) {
+    try {
+      final j = jsonDecode(body) as Map<String, dynamic>;
+      return (j['error'] ?? 'Er ging iets mis.').toString();
+    } catch (_) {
+      return 'Er ging iets mis.';
+    }
+  }
+  Future<Map<String, dynamic>> search(String q) => _guard('Zoeken', () async {
+        final r = await http.get(
             Uri.parse('$base/search?q=${Uri.encodeComponent(q)}'),
             headers: await _h());
         if (r.statusCode != 200) throw Exception('bad status');

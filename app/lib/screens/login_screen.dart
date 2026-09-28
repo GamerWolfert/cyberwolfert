@@ -20,6 +20,8 @@ class _LoginScreenState extends State<LoginScreen> {
   final _user = TextEditingController();
   final _pass = TextEditingController();
   final _display = TextEditingController();
+  final _email = TextEditingController();
+  bool _remember = true;
   String? _error;
   bool _busy = false;
 
@@ -29,13 +31,21 @@ class _LoginScreenState extends State<LoginScreen> {
       _busy = true;
       _error = null;
     });
+    final device = await AuthProvider.deviceId();
     final err = _register
-        ? await auth.register(_user.text.trim(), _pass.text, _display.text.trim())
-        : await auth.login(_user.text.trim(), _pass.text);
+        ? await auth.register(_user.text.trim(), _pass.text,
+            _display.text.trim(), _email.text.trim(), device, _remember)
+        : await auth.login(
+            _user.text.trim(), _pass.text, device, _remember);
     setState(() => _busy = false);
     if (err != null) {
       setState(() => _error = err);
     } else if (mounted) {
+      if (_register) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                'Account gemaakt! Check je e-mail om te bevestigen.')));
+      }
       Navigator.pop(context, true);
     }
   }
@@ -109,7 +119,8 @@ class _LoginScreenState extends State<LoginScreen> {
               TextField(
                 controller: _user,
                 decoration: const InputDecoration(
-                    labelText: 'Gebruikersnaam', border: OutlineInputBorder()),
+                    labelText: 'Gebruikersnaam of e-mailadres',
+                    border: OutlineInputBorder()),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -118,6 +129,26 @@ class _LoginScreenState extends State<LoginScreen> {
                 onSubmitted: (_) => _submit(),
                 decoration: const InputDecoration(
                     labelText: 'Wachtwoord', border: OutlineInputBorder()),
+              ),
+              if (_register) ...[
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _email,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                      labelText: 'E-mailadres (voor bevestiging)',
+                      border: OutlineInputBorder()),
+                ),
+              ],
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: const Text('Ingelogd blijven op dit apparaat',
+                    style: TextStyle(fontSize: 14)),
+                subtitle: const Text('Slaat gegevens voor dit apparaat op',
+                    style: TextStyle(fontSize: 11, color: Colors.white54)),
+                value: _remember,
+                onChanged: (v) => setState(() => _remember = v ?? true),
               ),
               if (_error != null) ...[
                 const SizedBox(height: 8),

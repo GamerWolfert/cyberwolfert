@@ -10,7 +10,92 @@ CREATE TABLE IF NOT EXISTS users (
   google_id TEXT UNIQUE,
   display_name VARCHAR(128),
   avatar_url TEXT,
+  email VARCHAR(256),
+  email_verified BOOLEAN DEFAULT FALSE,
+  email_token TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(LOWER(email)) WHERE email IS NOT NULL;
+
+-- Apparaten per gebruiker: onthouden-login, verbannen/deblokkeren via e-mail
+CREATE TABLE IF NOT EXISTS devices (
+  id SERIAL PRIMARY KEY,
+  user_id INT REFERENCES users(id) ON DELETE CASCADE,
+  device_id VARCHAR(128) NOT NULL,
+  label VARCHAR(128) DEFAULT 'Onbekend apparaat',
+  banned BOOLEAN DEFAULT FALSE,
+  last_seen TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, device_id)
+);
+
+-- Sessies ongeldig maken bij "dit was ik niet" (token blacklist op uitgegeven-voor)
+CREATE TABLE IF NOT EXISTS revoked_tokens (
+  id SERIAL PRIMARY KEY,
+  user_id INT REFERENCES users(id) ON DELETE CASCADE,
+  revoked_before TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- WolfSyn: servers (groepen), rollen, kanalen, berichten, DM's
+CREATE TABLE IF NOT EXISTS ws_servers (
+  id SERIAL PRIMARY KEY,
+  owner_id INT REFERENCES users(id) ON DELETE CASCADE,
+  name VARCHAR(64) NOT NULL,
+  invite_code VARCHAR(16) UNIQUE NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS ws_roles (
+  id SERIAL PRIMARY KEY,
+  server_id INT REFERENCES ws_servers(id) ON DELETE CASCADE,
+  name VARCHAR(32) NOT NULL,
+  color VARCHAR(16) DEFAULT '#29B6F6',
+  can_manage BOOLEAN DEFAULT FALSE,
+  can_kick BOOLEAN DEFAULT FALSE,
+  position INT DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS ws_members (
+  server_id INT REFERENCES ws_servers(id) ON DELETE CASCADE,
+  user_id INT REFERENCES users(id) ON DELETE CASCADE,
+  nick VARCHAR(64),
+  PRIMARY KEY (server_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS ws_member_roles (
+  server_id INT NOT NULL,
+  user_id INT NOT NULL,
+  role_id INT REFERENCES ws_roles(id) ON DELETE CASCADE,
+  PRIMARY KEY (server_id, user_id, role_id)
+);
+CREATE TABLE IF NOT EXISTS ws_channels (
+  id SERIAL PRIMARY KEY,
+  server_id INT REFERENCES ws_servers(id) ON DELETE CASCADE,
+  name VARCHAR(48) NOT NULL,
+  kind VARCHAR(16) DEFAULT 'text',
+  position INT DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS ws_messages (
+  id SERIAL PRIMARY KEY,
+  channel_id INT REFERENCES ws_channels(id) ON DELETE CASCADE,
+  user_id INT REFERENCES users(id) ON DELETE SET NULL,
+  body TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_ws_messages_channel ON ws_messages(channel_id, id DESC);
+CREATE TABLE IF NOT EXISTS ws_dms (
+  id SERIAL PRIMARY KEY,
+  from_id INT REFERENCES users(id) ON DELETE CASCADE,
+  to_id INT REFERENCES users(id) ON DELETE CASCADE,
+  body TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_ws_dms_pair ON ws_dms(from_id, to_id, id DESC);
+
+-- WolfSyn-profiel los van browser-loginnaam
+CREATE TABLE IF NOT EXISTS ws_profiles (
+  user_id INT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  display_name VARCHAR(64),
+  avatar_url TEXT,
+  bio VARCHAR(256) DEFAULT '',
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS user_settings (

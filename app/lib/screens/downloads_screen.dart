@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:open_file/open_file.dart';
+import '../services/auto_update.dart';
 import '../services/download_service.dart';
 import '../services/download_fs.dart' as fs;
 import '../services/update_service.dart';
@@ -75,6 +76,21 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.system_update),
+            tooltip: 'Controleren op updates',
+            onPressed: () async {
+              final messenger = ScaffoldMessenger.of(context);
+              messenger.showSnackBar(const SnackBar(
+                  content: Text('Controleren op updates…')));
+              final updated =
+                  await AutoUpdate.checkAndInstall(context);
+              if (!updated && context.mounted) {
+                messenger.showSnackBar(const SnackBar(
+                    content: Text('Je hebt de nieuwste versie. 🐺')));
+              }
+            },
+          ),
           if (_items.isNotEmpty)
             IconButton(
               icon: const Icon(Icons.delete_sweep),

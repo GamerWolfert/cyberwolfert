@@ -20,7 +20,17 @@ function readToken(req) {
 async function userIdFromToken(token) {
   try {
     const p = jwt.verify(token, JWT_SECRET);
-    return Number(p.uid) || null;
+    const uid = Number(p.uid) || null;
+    if (!uid) return null;
+    // Uitgelogd/gerapporteerd na uitgifte? Dan ongeldig (permanent, DB-check).
+    try {
+      const r = await db.query(
+        'SELECT 1 FROM revoked_tokens WHERE user_id=$1 AND revoked_before > to_timestamp($2)',
+        [uid, p.iat || 0]
+      );
+      if (r.rows.length) return null;
+    } catch (_) {}
+    return uid;
   } catch {
     return null;
   }

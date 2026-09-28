@@ -34,6 +34,18 @@ class AuthProvider extends ChangeNotifier {
   String get naam =>
       (user?['displayName'] ?? user?['username'] ?? 'Gast').toString();
 
+  /// Stabiele apparaat-ID voor device-ban/onthouden (eenmalig aangemaakt).
+  static Future<String> deviceId() async {
+    final p = await SharedPreferences.getInstance();
+    var id = p.getString('device_id');
+    if (id == null || id.isEmpty) {
+      id =
+          '${DateTime.now().millisecondsSinceEpoch}-${(1000 + (DateTime.now().microsecond % 9000))}';
+      await p.setString('device_id', id);
+    }
+    return id;
+  }
+
   Future<void> load() async {
     loading = true;
     notifyListeners();
@@ -76,11 +88,27 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<String?> register(String username, String password, String display) =>
-      _auth('register', {'username': username, 'password': password, 'displayName': display});
+  Future<String?> register(String username, String password, String display,
+      String email, String deviceId, bool remember) =>
+      _auth('register', {
+        'username': username,
+        'password': password,
+        'displayName': display,
+        'email': email,
+        'deviceId': deviceId,
+        'deviceLabel': 'App',
+        'remember': remember,
+      });
 
-  Future<String?> login(String username, String password) =>
-      _auth('login', {'username': username, 'password': password});
+  Future<String?> login(
+      String username, String password, String deviceId, bool remember) =>
+      _auth('login', {
+        'username': username,
+        'password': password,
+        'deviceId': deviceId,
+        'deviceLabel': 'App',
+        'remember': remember,
+      });
 
   Future<String?> googleStatus() async {
     try {
