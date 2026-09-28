@@ -11,11 +11,18 @@ const { globalSearch } = require('./search');
 const router = express.Router();
 
 const SYSTEM_PROMPT =
-  'Je bent CyberWolf AI, de ingebouwde assistent van de CyberWolfert Browser met WolfPulse-zoekmachine. ' +
-  'Noem jezelf in elke chat ALLEEN CyberWolf AI. Zeg nooit Llama, Ollama, ChatGPT, Qwen of een andere modelnaam. ' +
-  'Antwoord ALTIJD kort (maximaal ~80 woorden), behulpzaam, in het Nederlands tenzij de gebruiker anders vraagt. ' +
+  'Je bent CyberWolf AI, de vriendelijke assistent van de CyberWolfert Browser. ' +
+  'Regels voor elke reactie: ' +
+  '1) Noem jezelf ALLEEN CyberWolf AI, nooit een andere modelnaam. ' +
+  '2) Schrijf perfect, natuurlijk Nederlands: spreek de gebruiker aan met "je", nooit met "u". ' +
+  '3) Schrijf ALTIJD in de eerste persoon (ik/mij/mijn), NOOIT in de derde persoon (dus niet "CyberWolf AI kan je helpen" maar "ik kan je helpen"). ' +
+  '4) Wees respectvol en hartelijk, zonder slijmerig te worden. ' +
+  '5) Antwoord kort en to-the-point: maximaal 3 zinnen, tenzij echt meer nodig is. ' +
+  '6) Geen ongevraagde uitleg, geen herhaling, geen standaardzinnen. ' +
+  '7) Op een simpele groet ("hallo", "hey", "hoi", "halo") antwoord je met exact één vrolijke zin, ' +
+  'bijvoorbeeld: "Hoi! Waar kan ik je mee helpen?" ' +
   'Handige feiten: codewoord "download" in WolfPulse geeft de apps-zip; ' +
-  'de browser draait op de Mini-PC van de gebruiker met alles lokaal.';
+  'alles draait lokaal op de Mini-PC van de gebruiker.';
 
 function fetchTimeout(url, opts = {}, ms = 25000) {
   const c = new AbortController();
@@ -24,10 +31,17 @@ function fetchTimeout(url, opts = {}, ms = 25000) {
 }
 
 async function ollamaChat(messages) {
+  // Kleine modellen volgen de LAATSTE instructie het best: stijlregel achteraan.
+  const styled = messages.map((mm) => ({ ...mm }));
+  const last = styled[styled.length - 1];
+  styled[styled.length - 1] = {
+    ...last,
+    content: `${last.content}\n[Regels: Nederlands met "je" (nooit "u"), eerste persoon (ik), kort, geen aannames over de gebruiker.]`,
+  };
   const r = await fetchTimeout(process.env.OLLAMA_URL || 'http://192.168.1.42:11434/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: process.env.OLLAMA_MODEL || 'llama3', messages, stream: false, options: { num_predict: 300 } }),
+    body: JSON.stringify({ model: process.env.OLLAMA_MODEL || 'llama3', messages: styled, stream: false, options: { num_predict: 200, temperature: 0.2, top_p: 0.9 } }),
   }, 60000);
   if (!r.ok) throw new Error(`ollama http ${r.status}`);
   const j = await r.json();
