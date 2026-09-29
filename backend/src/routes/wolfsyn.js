@@ -180,9 +180,12 @@ if (sweeper.unref) sweeper.unref();
 // --- Servers ---
 router.get('/servers', async (req, res) => {
   const r = await db.query(
-    `SELECT s.*, (SELECT COUNT(*) FROM ws_members m WHERE m.server_id=s.id)::int AS members
-     FROM ws_servers s LEFT JOIN ws_members m ON m.server_id=s.id AND m.user_id=$1
-     WHERE s.owner_id=$1 OR m.user_id=$1 GROUP BY s.id ORDER BY s.created_at DESC`,
+    `SELECT s.*, (SELECT COUNT(*) FROM ws_members m WHERE m.server_id=s.id)::int AS members,
+            (SELECT COUNT(*) FROM ws_boosts b WHERE b.server_id=s.id)::int AS boosts,
+            EXISTS (SELECT 1 FROM ws_boosts b WHERE b.server_id=s.id AND b.user_id=$1) AS my_boost
+     FROM ws_servers s
+     WHERE s.owner_id=$1 OR EXISTS (SELECT 1 FROM ws_members m WHERE m.server_id=s.id AND m.user_id=$1)
+     ORDER BY s.created_at DESC`,
     [req.userId]
   );
   res.json(r.rows);

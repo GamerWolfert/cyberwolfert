@@ -1,7 +1,7 @@
 {
     "app": "CyberWolfert Browser",
-    "version": "2.4.0",
-    "build": 21,
+    "version": "2.4.1",
+    "build": 22,
     "minVersion": "1.0.0",
     "notes": "WolfSyn als Discord: server-tags achter je naam, vrienden met verzoeken, groeps-chats, gratis server-boosts; eigen mail met inbox en verificatiecodes; AI-agent met toestemming; verdwijnende berichten.",
     "updatedAt": "2026-09-29",

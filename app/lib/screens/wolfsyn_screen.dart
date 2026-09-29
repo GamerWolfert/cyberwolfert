@@ -197,11 +197,32 @@ class _WolfSynScreenState extends State<WolfSynScreen>
       itemCount: _servers.length,
       itemBuilder: (ctx, i) {
         final s = _servers[i] as Map<String, dynamic>;
+        final boosts = (s['boosts'] as num?)?.toInt() ?? 0;
+        final level = boosts >= 7 ? 2 : boosts >= 2 ? 1 : 0;
         return Card(
           child: ListTile(
             leading: CircleAvatar(
+                backgroundColor: level > 0
+                    ? _boostColor(level)
+                    : null,
                 child: Text((s['name'] ?? '?').toString().characters.first.toUpperCase())),
-            title: Text((s['name'] ?? '').toString()),
+            title: Wrap(spacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
+              Text((s['name'] ?? '').toString()),
+              if (level > 0)
+                Tooltip(
+                  message: 'Server boost niveau $level — gratis',
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                          colors: [Color(0xFF7B2FF7), Color(0xFF29B6F6)]),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text('⚡ $level',
+                        style: const TextStyle(fontSize: 10, color: Colors.white)),
+                  ),
+                ),
+            ]),
             subtitle: Text(
                 '${s['members'] ?? '?'} leden • code: ${s['invite_code'] ?? ''}'),
             trailing: const Icon(Icons.arrow_forward_ios, size: 16),
@@ -391,6 +412,9 @@ class _WolfSynScreenState extends State<WolfSynScreen>
     return ListView(
         padding: const EdgeInsets.all(12), children: rows);
   }
+
+  Color _boostColor(int level) =>
+      level >= 2 ? const Color(0xFFF4B400) : const Color(0xFF29B6F6);
 
   Widget _sectionHeader(String t) => Padding(
         padding: const EdgeInsets.only(top: 14, bottom: 4),
