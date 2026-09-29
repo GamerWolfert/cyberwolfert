@@ -5,7 +5,25 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/wolfsyn_service.dart';
 import '../widgets/app_logo.dart';
+import '../widgets/gif_message.dart';
+import '../widgets/gif_picker.dart';
+import '../widgets/wolfsyn_settings_overlay.dart';
 import 'login_screen.dart';
+
+/// Kiezer openen: gif/sticker direct versturen, emoji in het invoerveld.
+Future<void> wolfPickGif(BuildContext context, TextEditingController ctl,
+    Future<void> Function() send) async {
+  final pick = await showWolfGifPicker(context);
+  if (pick == null) return;
+  if (!pick.startsWith('http')) {
+    ctl.text += pick;
+    return;
+  }
+  final draft = ctl.text;
+  ctl.text = pick;
+  await send();
+  ctl.text = draft;
+}
 
 /// Groene online-stip op een avatar (inlogd in de laatste 60 seconden).
 Widget wolfOnline(Widget avatar, bool online, {double dot = 10}) {
@@ -146,6 +164,10 @@ class _WolfSynScreenState extends State<WolfSynScreen>
           ],
         ),
         actions: [
+          IconButton(
+              icon: const Icon(Icons.settings_outlined),
+              tooltip: 'Instellingen',
+              onPressed: () => showWolfSettings(context, onChanged: _load)),
           IconButton(
               icon: const Icon(Icons.person),
               tooltip: 'Mijn profiel',
@@ -1113,7 +1135,7 @@ class _ServerScreenState extends State<ServerScreen> {
                                               )),
                                         ],
                                       ),
-                                      Text((m['body'] ?? '').toString()),
+                                      GifBody((m['body'] ?? '').toString()),
                                       if (m['expires_at'] != null)
                                         _expiry(m['expires_at']),
                                     ],
@@ -1139,6 +1161,10 @@ class _ServerScreenState extends State<ServerScreen> {
                           border: OutlineInputBorder()),
                     ),
                   ),
+                  IconButton(
+                      tooltip: 'GIF of emoji',
+                      onPressed: () => wolfPickGif(context, _msg, _send),
+                      icon: const Icon(Icons.gif_box_outlined)),
                   IconButton(
                       onPressed: _send, icon: const Icon(Icons.send)),
                 ],
@@ -1648,7 +1674,7 @@ class _DmScreenState extends State<DmScreen> {
                           : CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text((m['body'] ?? '').toString()),
+                        GifBody((m['body'] ?? '').toString()),
                         if (m['expires_at'] != null)
                           Text(
                             _dmExpiry(m['expires_at']),
@@ -1676,6 +1702,10 @@ class _DmScreenState extends State<DmScreen> {
                           border: OutlineInputBorder()),
                     ),
                   ),
+                  IconButton(
+                      tooltip: 'GIF of emoji',
+                      onPressed: () => wolfPickGif(context, _msg, _send),
+                      icon: const Icon(Icons.gif_box_outlined)),
                   IconButton(
                       onPressed: _send, icon: const Icon(Icons.send)),
                 ],
@@ -1914,7 +1944,7 @@ class _GroupScreenState extends State<GroupScreen> {
                                   fontSize: 11,
                                   fontWeight: FontWeight.bold,
                                   color: Colors.lightBlueAccent)),
-                        Text((m['body'] ?? '').toString()),
+                        GifBody((m['body'] ?? '').toString()),
                         if (m['expires_at'] != null)
                           Text(
                             _expiry(m['expires_at']),
@@ -1942,6 +1972,10 @@ class _GroupScreenState extends State<GroupScreen> {
                           border: OutlineInputBorder()),
                     ),
                   ),
+                  IconButton(
+                      tooltip: 'GIF of emoji',
+                      onPressed: () => wolfPickGif(context, _msg, _send),
+                      icon: const Icon(Icons.gif_box_outlined)),
                   IconButton(
                       onPressed: _send, icon: const Icon(Icons.send)),
                 ],

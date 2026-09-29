@@ -1,9 +1,9 @@
 {
     "app": "CyberWolfert Browser",
-    "version": "2.4.2",
-    "build": 23,
+    "version": "2.5.0",
+    "build": 24,
     "minVersion": "1.0.0",
-    "notes": "WolfSyn als Discord: server-tags, vrienden met online-stip, groeps-chats, gratis server-boosts; eigen mail met inbox en verificatiecodes; AI-agent met toestemming; verdwijnende berichten.",
+    "notes": "WolfSyn met GIF's, stickers en emoji (Discord-achtige kiezer) plus instellingen-overlay; zoekopdrachten over het hele web; CyberWolf AI schrijft en draait scripts zonder weigeringen; langere AI-timeouts zodat de AI nooit meer offline lijkt.",
     "updatedAt": "2026-09-29",
     "iosUrl": ""
 }

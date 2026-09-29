@@ -61,16 +61,17 @@ class ApiService {
     return m;
   }
 
-  Future<T> _guard<T>(String wat, Future<T> Function() fn) async {
+  Future<T> _guard<T>(String wat, Future<T> Function() fn,
+      {Duration timeout = const Duration(seconds: 20)}) async {
     await resolveBase();
     try {
-      return await fn().timeout(const Duration(seconds: 15));
+      return await fn().timeout(timeout);
     } catch (e) {
       // Misschien is een ander adres bereikbaar (thuis LAN, buiten tunnel):
       // één keer opnieuw proberen, daarna de originele fout tonen.
       if (await resolveBase(force: true)) {
         try {
-          return await fn().timeout(const Duration(seconds: 15));
+          return await fn().timeout(timeout);
         } catch (_) {}
       }
       if (e is Exception) rethrow;
@@ -192,7 +193,7 @@ class ApiService {
         final j = jsonDecode(r.body) as Map<String, dynamic>;
         if (r.statusCode != 200) throw Exception('bad status');
         return (j['reply'] ?? '') as String;
-      });
+      }, timeout: const Duration(seconds: 240));
 
   Future<String> askAiWithImage(
       String message, List<Map<String, String>> history, String imagePath) =>
@@ -207,7 +208,7 @@ class ApiService {
         final j = jsonDecode(body) as Map<String, dynamic>;
         if (streamed.statusCode != 200) throw Exception('bad status');
         return (j['reply'] ?? '') as String;
-      });
+      }, timeout: const Duration(seconds: 240));
 
   // --- Remote agent: AI maakt een plan, jij geeft toestemming, Mini-PC voert uit ---
   Future<Map<String, dynamic>> agentPlan(String goal) =>
@@ -216,7 +217,7 @@ class ApiService {
             headers: await _h(json: true), body: jsonEncode({'goal': goal}));
         if (r.statusCode != 200) throw Exception(_apiFout(r.body));
         return jsonDecode(r.body) as Map<String, dynamic>;
-      });
+      }, timeout: const Duration(seconds: 180));
 
   Future<Map<String, dynamic>> agentRun(String id) =>
       _guard('Agent: uitvoeren', () async {

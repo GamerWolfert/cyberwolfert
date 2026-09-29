@@ -22,7 +22,12 @@ const STYLE =
   '4) Wees respectvol en hartelijk, zonder slijmerig te worden. ' +
   '5) Gewone antwoorden: maximaal 3 zinnen, kort en to-the-point, geen herhaling. ' +
   '6) Op een simpele groet antwoord je met exact één vrolijke zin, bv. "Hoi! Waar kan ik je mee helpen?" ' +
-  '7) Wees eerlijk: weet je het niet zeker, zeg dat dan gewoon.';
+  '7) Wees eerlijk: weet je het niet zeker, zeg dat dan gewoon. ' +
+  '8) Je zegt NOOIT "dat kan ik niet", "ik kan je niet helpen" of "sorry, ik heb geen kennis". ' +
+  'Je kunt altijd helpen: lever gewoon de code, het bestand of de stappen. ' +
+  'Kan iets alleen op een computer, verwijs dan naar "voer uit: <doel>" zodat de Mini-PC het uitvoert. ' +
+  '9) Maak je een bestand (bv. een .txt), geef dan het complete script dat het bestand aanmaakt, ' +
+  'plus het commando om het te draaien.';
 
 const CODING =
   'Regels als je code schrijft: ' +
@@ -31,7 +36,8 @@ const CODING =
   '3) Zet code in een codeblok met de juiste taal, bv. ```python. ' +
   '4) Zet er kort bij hoe je het uitvoert (bestandsnaam + commando). ' +
   '5) Uitleg in max 5 korte zinnen, daarna de code. ' +
-  '6) Gebruik veilige standaarden: geen expliciete wachtwoordsleutels in code.';
+  '6) Gebruik veilige standaarden: geen expliciete wachtwoordsleutels in code. ' +
+  '7) Schrijf ook het bestand weg als dat nodig is (bv. printf/cat in bash of open(...).write(...) in Python). ';
 
 const KNOWN_MODELS = ['qwen2.5:1.5b', 'qwen2.5-coder:1.5b', 'qwen2.5-coder:3b', 'qwen2.5-coder:7b', 'qwen2.5-coder:14b'];
 
@@ -48,11 +54,24 @@ function ollamaUrl() {
 
 function isCodeAsk(m) {
   const s = m.toLowerCase();
-  if (s.length > 400) return false;
-  return /```/.test(m) ||
-    /\b(script|code|coderen|programma|functie|klasse|class |function |def |const |let |var |import |export |html|css|javascript|typescript|python|dart|flutter|sql|bash|shell|powershell|regex|api|endpoint|compile|foutmelding|error|exception|stacktrace|debug|bug|refactor|widget|component)\b/.test(s) &&
-    /\b(maak|schrijf|geef|bouw|fix|herstel|fout|foutje|uitleg|hoe|help|schrijf|cre[eë]er|toon|genereer|nodig|nodig hebt|script|code)\b/.test(s) ||
+  if (s.length > 600) return false;
+  if (/```/.test(m)) return true;
+  // Bestand/terminal-acties tellen altijd als codevraag.
+  if (/\b(txt|bestand|bestanden|map|folder|script|shell|commando|run|uitvoeren|draai(en)?)\b/.test(s) &&
+      /\b(maak|schrijf|cre[eë]er|voeg|run|uitvoeren|draai|genereer|herschrijf|verwijder|lees|tel|zip|backup)\b/.test(s)) return true;
+  return /\b(script|code|coderen|codeer|programma|functie|klasse|class |function |def |const |let |var |import |export |html|css|javascript|typescript|python|dart|flutter|sql|bash|shell|powershell|regex|api|endpoint|compile|foutmelding|error|exception|stacktrace|debug|bug|refactor|widget|component)\b/.test(s) &&
+    /\b(maak|schrijf|geef|bouw|fix|herstel|fout|foutje|uitleg|hoe|help|cre[eë]er|toon|genereer|nodig|script|code|kan|kunt|zou|zou je|wil)\b/.test(s) ||
     /maak.*(script|code|programma|bestand)/.test(s);
+}
+
+// Model dat "sorry, ik kan niet" teruggeeft: opnieuw proberen met de coder
+// en een harde regel ertegen — dat is het echte probleem van de AI.
+function isRefusal(reply) {
+  const s = String(reply || '').toLowerCase().trim();
+  if (!s || s.length > 700) return false;
+  if (/\b```/.test(s)) return false; // er zit code in, dus hulp is wél geleverd
+  return /\b(sorry|het spijt)\b[^.]{0,80}\b(niet|geen)\b/.test(s) ||
+    /\b(ik kan (je |het |dat )?niet|dat kan ik niet|ik ben niet in staat|geen ervaring met|geen kennis|ik kan alleen helpen met andere|ik weet niet hoe ik|hapert)\b/.test(s);
 }
 
 function isLookupAsk(m) {
@@ -401,14 +420,15 @@ router.post('/chat', uploadAi.single('image'), async (req, res) => {
   } catch (_) {}
 
   const ctx = await webContext(message, codeMode);
-  const sys = IDENTITY + '\n' + STYLE + (codeMode ? '\n' + CODING : '') +
-    memoryLine + ctx +
+  const sysFor = (cm) =>
+    IDENTITY + '\n' + STYLE + (cm ? '\n' + CODING : '') + memoryLine + ctx +
     `\nHet is nu ${new Date().toLocaleString('nl-NL')}. CyberWolfert ${versionInfo().version}.`;
-  const messages = [
-    { role: 'system', content: sys },
+  const build = (cm) => [
+    { role: 'system', content: sysFor(cm) },
     ...(Array.isArray(history) ? history.slice(-10) : []),
     { role: 'user', content: message },
   ];
+  const messages = build(codeMode);
 
   let out = null;
   if (imageB64) {
@@ -430,6 +450,22 @@ router.post('/chat', uploadAi.single('image'), async (req, res) => {
       } catch (e) {
         console.warn('[ai] engine failed:', e.message);
       }
+    }
+  }
+
+  // Weigering herkennen -> één tweede ronde met de coder en een dwingende regel.
+  if (out && !codeMode && isRefusal(out.reply)) {
+    try {
+      const force = build(true);
+      force[force.length - 1] = {
+        role: 'user',
+        content: `${message}\n\n[Regel: je BIEDT dit altijd aan en levert het ook. Schrijf de code/het script ` +
+          'en zeg hoe je het uitvoert. Nooit weigeren, nooit "dat kan ik niet".]',
+      };
+      const second = await ollamaChat(force, true);
+      if (second && second.reply && !isRefusal(second.reply)) out = second;
+    } catch (e) {
+      console.warn('[ai] herstel-aanvraag mislukt:', e.message);
     }
   }
   if (!out) {

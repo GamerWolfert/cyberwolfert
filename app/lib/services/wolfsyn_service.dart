@@ -116,6 +116,17 @@ class WolfSynService {
       (await _api.apiPut('/wolf/profile',
           {'display_name': displayName, 'bio': bio})) as Map<String, dynamic>;
 
+  /// GIF's/stickers voor de WolfSyn-kiezer (Tenor via de backend).
+  Future<List<dynamic>> gifs(String q, {bool stickers = false}) async {
+    final term = q.trim().isNotEmpty ? q.trim() : (stickers ? 'sticker' : '');
+    final r = await _api
+        .apiGet(term.isEmpty ? '/gifs' : '/gifs?q=${Uri.encodeComponent(term)}');
+    if (r is Map<String, dynamic>) {
+      return (r['results'] as List<dynamic>?) ?? const [];
+    }
+    return r is List<dynamic> ? r : const [];
+  }
+
   Future<String> uploadAvatar(String imagePath, String fileName) async {
     final url = await _api.uploadImage(imagePath, fileName);
     await _api.apiPost('/wolf/avatar', {'avatar_url': url});

@@ -28,25 +28,48 @@ function decodeEntities(s) {
     .replace(/<[^>]*>/g, '').trim();
 }
 
-async function ddgLite(q) {
+// DDG geeft zijn echte URL in ?uddg= (of als //duckduckgo.com/l/?uddg=...);
+// die moeten we terugdecoden, anders gooien we élk resultaat weg.
+function unwrapUrl(href) {
+  let u = String(href || '').trim();
+  if (!u) return '';
+  u = u.replace(/&amp;/g, '&');
+  const m = u.match(/[?&]uddg=([^&]+)/);
+  if (m) {
+    try {
+      const real = decodeURIComponent(m[1]);
+      if (/^https?:\/\//.test(real)) return real;
+    } catch (_) {}
+  }
+  if (u.startsWith('//')) return 'https:' + u;
+  return u;
+}
+
+function isJunkUrl(u) {
+  return /duckduckgo\.com\/y\.js|\/l\/\?rut=/.test(u) && !/[?&]uddg=/.test(u);
+}
+
+async function ddgHtml(q, endpoint) {
   try {
     const r = await fetchTimeout(
-      `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(q)}`,
+      `${endpoint}?q=${encodeURIComponent(q)}`,
       { headers: { ...UA, Accept: 'text/html' } },
-      6000
+      7000
     );
     if (!r.ok) return [];
     const html = await r.text();
     const out = [];
-    const linkRe = /<a[^>]*rel="nofollow"[^>]*href="([^"]+)"[^>]*>(.*?)<\/a>/gis;
-    const snipRe = /class=['"]snippet['"][^>]*>(.*?)<\/td>/is;
+    const seen = new Set();
+    const linkRe = /<a[^>]*class=["'][^"']*\bresult__a\b[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>(.*?)<\/a>/gis;
+    const snipRe = /class=["'][^"']*\bresult__snippet\b[^"']*["'][^>]*>(.*?)<\/(?:a|td|div)>/is;
     let m;
-    while ((m = linkRe.exec(html)) && out.length < 10) {
-      const url = m[1];
-      if (url.startsWith('//duckduckgo.com') || url.includes('duckduckgo.com/y.js')) continue;
+    while ((m = linkRe.exec(html)) && out.length < 12) {
+      const url = unwrapUrl(m[1]);
       const title = decodeEntities(m[2]);
-      if (!title || !/^https?:\/\//.test(url)) continue;
-      const tail = html.slice(m.index, m.index + 3000);
+      if (!title || !/^https?:\/\//.test(url) || isJunkUrl(url)) continue;
+      if (seen.has(url)) continue;
+      seen.add(url);
+      const tail = html.slice(m.index, m.index + 4000);
       const sn = snipRe.exec(tail);
       out.push({ title, url, snippet: decodeEntities(sn ? sn[1] : ''), source: 'duckduckgo' });
     }
@@ -57,12 +80,68 @@ async function ddgLite(q) {
   }
 }
 
+// lite-variant: platte tabel, geen class-namen.
+async function ddgLite(q) {
+  try {
+    const r = await fetchTimeout(
+      `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(q)}`,
+      { headers: { ...UA, Accept: 'text/html' } },
+      7000
+    );
+    if (!r.ok) return [];
+    const html = await r.text();
+    const out = [];
+    const seen = new Set();
+    const linkRe = /<a[^>]*rel="nofollow"[^>]*href="([^"]+)"[^>]*>(.*?)<\/a>/gis;
+    const snipRe = /class=['"]snippet['"][^>]*>(.*?)<\/td>/is;
+    let m;
+    while ((m = linkRe.exec(html)) && out.length < 12) {
+      const url = unwrapUrl(m[1]);
+      const title = decodeEntities(m[2]);
+      if (!title || !/^https?:\/\//.test(url) || isJunkUrl(url)) continue;
+      if (seen.has(url)) continue;
+      seen.add(url);
+      const tail = html.slice(m.index, m.index + 3000);
+      const sn = snipRe.exec(tail);
+      out.push({ title, url, snippet: decodeEntities(sn ? sn[1] : ''), source: 'duckduckgo' });
+    }
+    return out;
+  } catch (e) {
+    console.warn('[search] ddg-lite failed:', e.message);
+    return [];
+  }
+}
+
 async function wikipedia(q) {
   for (const lang of ['nl', 'en']) {
+    // 1) echte zoek-API (werkt ook met meerdere woorden)
+    try {
+      const r = await fetchTimeout(
+        `https://${lang}.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(q)}` +
+        '&srlimit=6&srprop=snippet&format=json&origin=*',
+        { headers: { ...UA, Accept: 'application/json' } },
+        7000
+      );
+      if (r.ok) {
+        const j = await r.json();
+        const hits = j?.query?.search || [];
+        const out = hits.map((h) => ({
+          title: `${h.title} — Wikipedia`,
+          url: `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(String(h.title).replace(/ /g, '_'))}`,
+          snippet: decodeEntities(h.snippet),
+          source: 'wikipedia',
+        }));
+        if (out.length) return out;
+      }
+    } catch (e) {
+      console.warn('[search] wiki failed:', e.message);
+    }
+    // 2) opensearch als fallback
     try {
       const r = await fetchTimeout(
         `https://${lang}.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(q)}&limit=5&format=json`,
-        { headers: { ...UA, Accept: 'application/json' } }
+        { headers: { ...UA, Accept: 'application/json' } },
+        7000
       );
       if (!r.ok) continue;
       const j = await r.json();
@@ -124,35 +203,69 @@ async function braveSearch(q) {
 }
 
 async function globalSearch(q) {
-  // 1) Eigen SearXNG op Mini-PC
-  if (process.env.SEARXNG_URL) {
-    const own = await searxInstance(process.env.SEARXNG_URL, q);
-    if (own.length) return own;
-  }
-  // 2) Brave API (gratis tier, key in config.env) + eigen SearXNG parallel
-  const [brave, ...publics] = await Promise.all([
-    braveSearch(q),
-    ...PUBLIC_SEARX.map((u) => searxInstance(u, q)),
-  ]);
-  const best = brave.length ? brave : publics.find((r) => r.length) || [];
-  if (best.length) return best;
-  if (process.env.BING_API_KEY) {
-    try {
-      const r = await fetchTimeout(
-        `${process.env.BING_ENDPOINT}?q=${encodeURIComponent(q)}&count=15&mkt=nl-NL`,
-        { headers: { 'Ocp-Apim-Subscription-Key': process.env.BING_API_KEY } }
-      );
-      const j = await r.json();
-      const results = (j.webPages?.value || []).map((x) => ({
-        title: x.name, url: x.url, snippet: x.snippet, source: 'bing',
-      }));
-      if (results.length) return results;
-    } catch (e) {
-      console.warn('[search] bing failed:', e.message);
+  // Alle bronnen parallel; nooit meer afhankelijk van één dienst.
+  const jobs = [];
+  if (process.env.SEARXNG_URL) jobs.push(['searxng', searxInstance(process.env.SEARXNG_URL, q)]);
+  jobs.push(['brave', braveSearch(q)]);
+  for (const u of PUBLIC_SEARX) jobs.push(['searxng', searxInstance(u, q)]);
+  jobs.push(['duckduckgo', ddgHtml(q, 'https://html.duckduckgo.com/html/')]);
+  jobs.push(['duckduckgo', ddgLite(q)]);
+  jobs.push(['wikipedia', wikipedia(q)]);
+  if (process.env.BING_API_KEY) jobs.push(['bing', bingSearch(q)]);
+
+  const done = await Promise.allSettled(jobs.map(([, p]) => p));
+  const out = [];
+  const seen = new Set();
+  let i = 0;
+  for (const res of done) {
+    const source = jobs[i++][0];
+    if (res.status !== 'fulfilled' || !Array.isArray(res.value)) continue;
+    for (const r of res.value) {
+      const url = String(r.url || '').trim();
+      if (!url || !/^https?:\/\//.test(url) || seen.has(url)) continue;
+      seen.add(url);
+      out.push({ ...r, source: r.source || source });
     }
   }
-  const [ddg, wiki] = await Promise.all([ddgLite(q), wikipedia(q)]);
-  return [...ddg, ...wiki];
+  // DuckDuckGo/Wikipedia/Bing het eerst: beste relevantie, searxng erbij.
+  const rank = { local: 0, duckduckgo: 1, bing: 2, brave: 3, searxng: 4, wikipedia: 5 };
+  out.sort((a, b) => (rank[a.source] ?? 9) - (rank[b.source] ?? 9));
+  return out.slice(0, 25);
+}
+
+async function bingSearch(q) {
+  try {
+    const r = await fetchTimeout(
+      `${process.env.BING_ENDPOINT || 'https://api.bing.microsoft.com/v7.0/search'}?q=${encodeURIComponent(q)}&count=15&mkt=nl-NL`,
+      { headers: { 'Ocp-Apim-Subscription-Key': process.env.BING_API_KEY } },
+      8000
+    );
+    if (!r.ok) return [];
+    const j = await r.json();
+    return (j.webPages?.value || []).map((x) => ({
+      title: x.name, url: x.url, snippet: x.snippet, source: 'bing',
+    }));
+  } catch (e) {
+    console.warn('[search] bing failed:', e.message);
+    return [];
+  }
+}
+
+// Zoeken mag nooit blijven hangen: hard tijdslimiet op de hele keten.
+async function globalSearchTimed(q, ms = 12000) {
+  let timer;
+  try {
+    return await Promise.race([
+      globalSearch(q),
+      new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('zoek-timeout')), ms); }),
+    ]);
+  } catch (e) {
+    console.warn('[search] keten:', e.message);
+    const [ddg, wiki] = await Promise.all([ddgLite(q), wikipedia(q)]);
+    return [...ddg, ...wiki].slice(0, 25);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function fileLinks(q, req) {
@@ -204,7 +317,7 @@ router.get('/', async (req, res) => {
   const { local: dbLocal, uid } = await dbLinks(q, req);
   if (uid) log.zoekterm(await naamOf(uid), q);
   const local = [...dbLocal, ...fileLinks(q, req)];
-  const global = await globalSearch(q);
+  const global = await globalSearchTimed(q);
   res.json({ query: q, local, results: [...local, ...global] });
 });
 
@@ -245,4 +358,4 @@ router.post('/links', async (req, res) => {
 });
 
 module.exports = router;
-module.exports.globalSearch = globalSearch;
+module.exports.globalSearch = globalSearchTimed;

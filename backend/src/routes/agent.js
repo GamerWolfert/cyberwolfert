@@ -60,6 +60,8 @@ Regels:
 - cmd mag alleen starten met: ${ALLOWED.join(', ')}.
 - Geen pipes, geen ;, geen &&, geen redirect (> <).
 - Schrijf werkende, complete code (python3/node/bash).
+- GEEN tests, geen asserts, geen self-checks in het script: alleen doen wat de gebruiker vroeg.
+- Gebruik geen interactieve input (input()/prompt), want het script draait automatisch.
 - Als je informatie mist: maak een aanname en zet die in summary.
 - Gebruikersdoel: ${JSON.stringify(String(goal).slice(0, 1200))}`;
 }
@@ -93,9 +95,9 @@ async function askPlanner(goal, retry) {
         { role: 'system', content: sys },
         { role: 'user', content: goal },
       ],
-      options: { num_predict: 1600, temperature: 0.1, top_p: 0.9, num_ctx: 4096, repeat_penalty: 1.02, keep_alive: '15m' },
+      options: { num_predict: 900, temperature: 0.1, top_p: 0.9, num_ctx: 4096, repeat_penalty: 1.02, keep_alive: '15m' },
     }),
-  }, 60000);
+  }, 90000);
   if (!r.ok) throw new Error(`ollama http ${r.status}`);
   const j = await r.json();
   return j.message?.content || j.response || '';
