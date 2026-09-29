@@ -270,6 +270,7 @@ router.get('/servers/:id', async (req, res) => {
   const members = await db.query(
     `SELECT u.id, u.username, COALESCE(p.display_name, u.display_name, u.username) AS display,
             COALESCE(p.avatar_url, u.avatar_url) AS avatar, m.server_tag AS tag,
+            (u.last_seen > NOW() - interval '60 seconds') AS online, u.last_seen,
             COALESCE(array_agg(mr.role_id) FILTER (WHERE mr.role_id IS NOT NULL), '{}') AS roles
      FROM ws_members m JOIN users u ON u.id=m.user_id
      LEFT JOIN ws_profiles p ON p.user_id=u.id
@@ -431,7 +432,8 @@ router.get('/users', async (req, res) => {
   if (q.length < 2) return res.json([]);
   const r = await db.query(
     `SELECT u.id, u.username, COALESCE(p.display_name, u.display_name, u.username) AS display,
-            COALESCE(p.avatar_url, u.avatar_url) AS avatar
+            COALESCE(p.avatar_url, u.avatar_url) AS avatar,
+            (u.last_seen > NOW() - interval '60 seconds') AS online, u.last_seen
      FROM users u LEFT JOIN ws_profiles p ON p.user_id=u.id
      WHERE u.id != $2 AND (u.username ILIKE $1 OR COALESCE(p.display_name,'') ILIKE $1) LIMIT 10`,
     [`%${q}%`, req.userId]
@@ -482,7 +484,8 @@ router.get('/inbox', async (req, res) => {
   for (const row of r.rows) {
     const u = await db.query(
       `SELECT u.id, u.username, COALESCE(p.display_name, u.display_name, u.username) AS display,
-              COALESCE(p.avatar_url, u.avatar_url) AS avatar
+              COALESCE(p.avatar_url, u.avatar_url) AS avatar,
+              (u.last_seen > NOW() - interval '60 seconds') AS online, u.last_seen
        FROM users u LEFT JOIN ws_profiles p ON p.user_id=u.id WHERE u.id=$1`,
       [row.partner]
     );
@@ -501,7 +504,9 @@ async function addFriend(a, b) {
 }
 
 const friendCols = `u.id, u.username, COALESCE(p.display_name, u.display_name, u.username) AS display,
-        COALESCE(p.avatar_url, u.avatar_url) AS avatar`;
+        COALESCE(p.avatar_url, u.avatar_url) AS avatar,
+        (u.last_seen > NOW() - interval '60 seconds') AS online,
+        u.last_seen`;
 // Let m.id altijd de bericht-id zijn (friendCols bevat ook u.id).
 const groupMsgCols = `m.id, m.group_id, m.user_id, m.body, m.expires_at, m.created_at, u.username,
         COALESCE(p.display_name, u.display_name, u.username) AS display,
@@ -751,7 +756,8 @@ router.post('/groups/:id/leave', async (req, res) => {
 router.get('/profile', async (req, res) => {
   const r = await db.query(
     `SELECT u.id, u.username, COALESCE(p.display_name, u.display_name, u.username) AS display,
-            COALESCE(p.avatar_url, u.avatar_url) AS avatar, COALESCE(p.bio,'') AS bio
+            COALESCE(p.avatar_url, u.avatar_url) AS avatar, COALESCE(p.bio,'') AS bio,
+            u.last_seen, (u.last_seen > NOW() - interval '60 seconds') AS online
      FROM users u LEFT JOIN ws_profiles p ON p.user_id=u.id WHERE u.id=$1`,
     [req.userId]
   );

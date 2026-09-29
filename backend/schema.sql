@@ -13,9 +13,11 @@ CREATE TABLE IF NOT EXISTS users (
   email VARCHAR(256),
   email_verified BOOLEAN DEFAULT FALSE,
   email_token TEXT,
+  last_seen TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(LOWER(email)) WHERE email IS NOT NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen TIMESTAMPTZ;
 
 -- Apparaten per gebruiker: onthouden-login, verbannen/deblokkeren via e-mail
 CREATE TABLE IF NOT EXISTS devices (

@@ -39,14 +39,36 @@ async function userIdFromToken(token) {
 async function authOptional(req, res, next) {
   const t = readToken(req);
   req.userId = t ? await userIdFromToken(t) : null;
+  if (req.userId) touchPresence(req.userId);
   next();
 }
+
+// --- Aanwezigheid (online-stip bij vrienden) ---
+// Niet elke request wegschrijven: hoogstens 1x per 30s per gebruiker.
+const ONLINE_WINDOW = 60; // seconden: "online" als je dit recent actief was
+const seenAt = new Map();
+
+function touchPresence(uid) {
+  const now = Date.now();
+  const last = seenAt.get(uid) || 0;
+  if (now - last < 30000) return;
+  seenAt.set(uid, now);
+  db.query('UPDATE users SET last_seen=NOW() WHERE id=$1', [uid]).catch(() => {});
+}
+
+// Groeit anders eindeloos: ruim oude entries op.
+const prune = setInterval(() => {
+  const cutoff = Date.now() - 120000;
+  for (const [uid, ts] of seenAt) if (ts < cutoff) seenAt.delete(uid);
+}, 60000);
+if (prune.unref) prune.unref();
 
 async function authRequired(req, res, next) {
   const t = readToken(req);
   const uid = t ? await userIdFromToken(t) : null;
   if (!uid) return res.status(401).json({ error: 'login_required' });
   req.userId = uid;
+  touchPresence(uid);
   next();
 }
 

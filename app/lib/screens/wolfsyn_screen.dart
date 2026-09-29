@@ -7,6 +7,40 @@ import '../services/wolfsyn_service.dart';
 import '../widgets/app_logo.dart';
 import 'login_screen.dart';
 
+/// Groene online-stip op een avatar (inlogd in de laatste 60 seconden).
+Widget wolfOnline(Widget avatar, bool online, {double dot = 10}) {
+  if (!online) return avatar;
+  return Stack(
+    clipBehavior: Clip.none,
+    children: [
+      avatar,
+      Positioned(
+        right: -1,
+        bottom: -1,
+        child: Container(
+          width: dot,
+          height: dot,
+          decoration: BoxDecoration(
+            color: Colors.greenAccent.shade400,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.black87, width: 2),
+          ),
+        ),
+      ),
+    ],
+  );
+}
+
+String wolfLastSeen(dynamic raw) {
+  final dt = DateTime.tryParse(raw?.toString() ?? '')?.toLocal();
+  if (dt == null) return 'Nog niet online geweest';
+  final d = DateTime.now().difference(dt);
+  if (d.inSeconds < 60) return 'Zojuist online';
+  if (d.inMinutes < 60) return 'Online ${d.inMinutes} min geleden';
+  if (d.inHours < 24) return 'Online ${d.inHours} u geleden';
+  return 'Online op ${dt.day}-${dt.month}-${dt.year}';
+}
+
 /// WolfSyn: community zoals Discord — servers, kanalen, rollen, DM's.
 /// Volledig scherm; zonder login eerst naar browser-login.
 class WolfSynScreen extends StatefulWidget {
@@ -272,10 +306,12 @@ class _WolfSynScreenState extends State<WolfSynScreen>
         final m = r as Map<String, dynamic>;
         return Card(
           child: ListTile(
-            leading: _avatar(m['avatar']?.toString(),
-                (m['display'] ?? m['username'] ?? '?').toString(), r: 18),
+            leading: wolfOnline(
+                _avatar(m['avatar']?.toString(),
+                    (m['display'] ?? m['username'] ?? '?').toString(), r: 18),
+                m['online'] == true),
             title: Text((m['display'] ?? m['username'] ?? '?').toString()),
-            subtitle: const Text('wil vriend worden'),
+            subtitle: Text('wil vriend worden${m['online'] == true ? ' • online' : ''}'),
             trailing: Row(mainAxisSize: MainAxisSize.min, children: [
               IconButton(
                 icon: const Icon(Icons.check_circle, color: Colors.greenAccent),
@@ -320,13 +356,19 @@ class _WolfSynScreenState extends State<WolfSynScreen>
       final m = f as Map<String, dynamic>;
       return Card(
         child: ListTile(
-          leading: _avatar(
-              m['avatar']?.toString(),
-              (m['display'] ?? m['username'] ?? '?').toString(),
-              r: 18),
+          leading: wolfOnline(
+              _avatar(m['avatar']?.toString(),
+                  (m['display'] ?? m['username'] ?? '?').toString(), r: 18),
+              m['online'] == true),
           title: Text((m['display'] ?? m['username'] ?? '?').toString()),
-          subtitle: Text('@${m['username'] ?? ''}',
-              style: const TextStyle(fontSize: 11)),
+          subtitle: Text(
+              m['online'] == true
+                  ? 'Online • @${m['username'] ?? ''}'
+                  : '${wolfLastSeen(m['last_seen'])} • @${m['username'] ?? ''}',
+              style: TextStyle(
+                  fontSize: 11,
+                  color:
+                      m['online'] == true ? Colors.greenAccent : Colors.white54)),
           trailing: PopupMenuButton<String>(
             onSelected: (v) async {
               if (v == 'dm') {
@@ -335,6 +377,7 @@ class _WolfSynScreenState extends State<WolfSynScreen>
                   MaterialPageRoute(
                       builder: (_) => DmScreen(
                           userId: (m['id'] as num).toInt(),
+                          online: m['online'] == true,
                           name: (m['display'] ?? m['username'] ?? '?')
                               .toString())),
                 ).then((_) => _load());
@@ -357,6 +400,7 @@ class _WolfSynScreenState extends State<WolfSynScreen>
             MaterialPageRoute(
                 builder: (_) => DmScreen(
                     userId: (m['id'] as num).toInt(),
+                    online: m['online'] == true,
                     name: (m['display'] ?? m['username'] ?? '?').toString())),
           ).then((_) => _load()),
         ),
@@ -460,10 +504,18 @@ class _WolfSynScreenState extends State<WolfSynScreen>
                 ...found.map((u) {
                   final m = u as Map;
                   return ListTile(
-                    leading: _avatar(m['avatar']?.toString(),
-                        (m['display'] ?? m['username'] ?? '?').toString(),
-                        r: 18),
-                    title: Text((m['display'] ?? m['username'] ?? '?').toString()),
+                    leading: wolfOnline(
+                        _avatar(m['avatar']?.toString(),
+                            (m['display'] ?? m['username'] ?? '?').toString(),
+                            r: 18),
+                        m['online'] == true),
+                    title: Text(
+                        (m['display'] ?? m['username'] ?? '?').toString()),
+                    subtitle: m['online'] == true
+                        ? const Text('online',
+                            style: TextStyle(
+                                fontSize: 11, color: Colors.greenAccent))
+                        : null,
                     trailing: const Icon(Icons.person_add),
                     onTap: () async {
                       try {
@@ -587,8 +639,10 @@ class _WolfSynScreenState extends State<WolfSynScreen>
         final u = (c['user'] ?? {}) as Map<String, dynamic>;
         return Card(
           child: ListTile(
-            leading: _avatar(u['avatar']?.toString(),
-                (u['display'] ?? u['username'] ?? '?').toString()),
+            leading: wolfOnline(
+                _avatar(u['avatar']?.toString(),
+                    (u['display'] ?? u['username'] ?? '?').toString()),
+                u['online'] == true),
             title: Text(
                 (u['display'] ?? u['username'] ?? '?').toString()),
             subtitle: Text((c['last'] ?? '').toString(),
@@ -598,6 +652,7 @@ class _WolfSynScreenState extends State<WolfSynScreen>
               MaterialPageRoute(
                   builder: (_) => DmScreen(
                       userId: (u['id'] as num).toInt(),
+                      online: u['online'] == true,
                       name: (u['display'] ?? u['username'] ?? '?')
                           .toString())),
             ).then((_) => _load()),
@@ -687,12 +742,20 @@ class _WolfSynScreenState extends State<WolfSynScreen>
                   },
                 ),
                 ...found.map((u) => ListTile(
-                      leading: _avatar(
-                          (u as Map)['avatar']?.toString(),
-                          (u['display'] ?? u['username'] ?? '?').toString(),
-                          r: 18),
+                      leading: wolfOnline(
+                          _avatar(
+                              (u as Map)['avatar']?.toString(),
+                              (u['display'] ?? u['username'] ?? '?')
+                                  .toString(),
+                              r: 18),
+                          u['online'] == true),
                       title: Text(
                           (u['display'] ?? u['username'] ?? '?').toString()),
+                      subtitle: u['online'] == true
+                          ? const Text('online',
+                              style: TextStyle(
+                                  fontSize: 11, color: Colors.greenAccent))
+                          : null,
                       onTap: () {
                         Navigator.pop(ctx);
                         Navigator.push(
@@ -700,6 +763,7 @@ class _WolfSynScreenState extends State<WolfSynScreen>
                           MaterialPageRoute(
                               builder: (_) => DmScreen(
                                   userId: (u['id'] as num).toInt(),
+                                  online: u['online'] == true,
                                   name: (u['display'] ??
                                           u['username'] ??
                                           '?')
@@ -1315,7 +1379,7 @@ class _ServerScreenState extends State<ServerScreen> {
                         (m['display'] ?? m['username'] ?? '?').toString();
                     final tag = (m['tag'] ?? '').toString();
                     return ListTile(
-                      leading: _avatar(m),
+                      leading: wolfOnline(_avatar(m), m['online'] == true),
                       title: Wrap(
                           spacing: 6,
                           crossAxisAlignment: WrapCrossAlignment.center,
@@ -1451,7 +1515,12 @@ class _ServerScreenState extends State<ServerScreen> {
 class DmScreen extends StatefulWidget {
   final int userId;
   final String name;
-  const DmScreen({super.key, required this.userId, required this.name});
+  final bool online;
+  const DmScreen(
+      {super.key,
+      required this.userId,
+      required this.name,
+      this.online = false});
 
   @override
   State<DmScreen> createState() => _DmScreenState();
@@ -1526,7 +1595,28 @@ class _DmScreenState extends State<DmScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.name)),
+      appBar: AppBar(
+        title: Row(mainAxisSize: MainAxisSize.min, children: [
+          Flexible(
+              child: Text(widget.name,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 16))),
+          const SizedBox(width: 8),
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: widget.online
+                  ? Colors.greenAccent.shade400
+                  : Colors.white24,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Text(widget.online ? 'online' : 'offline',
+              style: const TextStyle(fontSize: 11, color: Colors.white54)),
+        ]),
+      ),
       body: Column(
         children: [
           Expanded(
@@ -1714,7 +1804,7 @@ class _GroupScreenState extends State<GroupScreen> {
               ..._members.map((m) {
                 final mm = m as Map<String, dynamic>;
                 return ListTile(
-                  leading: _avatarOf(mm, 18),
+                  leading: wolfOnline(_avatarOf(mm, 18), mm['online'] == true),
                   title: Text((mm['display'] ?? mm['username'] ?? '?')
                       .toString()),
                   subtitle: Text(
