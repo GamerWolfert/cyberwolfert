@@ -187,8 +187,9 @@ class _BrowserViewState extends State<BrowserView> {
     try {
       final origin = Uri.base.origin;
       final r = await http
-          .get(Uri.parse(
-              '$origin/api/frame-check?url=${Uri.encodeComponent(url)}'))
+          .get(
+              Uri.parse('$origin/api/frame-check?url=${Uri.encodeComponent(url)}'),
+              headers: const {'ngrok-skip-browser-warning': '1'})
           .timeout(const Duration(seconds: 10));
       if (r.statusCode == 200) {
         final j = jsonDecode(r.body) as Map<String, dynamic>;

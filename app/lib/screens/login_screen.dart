@@ -4,7 +4,6 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:provider/provider.dart';
-import '../config/constants.dart';
 import '../providers/auth_provider.dart';
 import '../providers/settings_provider.dart';
 import '../widgets/app_logo.dart';
@@ -108,10 +107,10 @@ class _LoginScreenState extends State<LoginScreen> {
       final idToken = gauth.idToken;
       if (idToken == null) throw Exception('geen id_token');
       final r = await http
-          .post(Uri.parse('${AppConfig.baseUrl}/auth/google'),
-              headers: {'Content-Type': 'application/json'},
+          .post(await auth.apiUri('/auth/google'),
+              headers: AuthProvider.jsonHeaders,
               body: jsonEncode({'id_token': idToken}))
-          .timeout(const Duration(seconds: 12));
+          .timeout(const Duration(seconds: 15));
       final j = jsonDecode(r.body) as Map<String, dynamic>;
       if (r.statusCode != 200) throw Exception((j['error'] ?? 'mislukt').toString());
       await AuthStore.set(j['token'] as String?);

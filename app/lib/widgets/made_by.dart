@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../config/constants.dart';
+import '../services/api_service.dart';
 
 /// "v1.x • Made by GamerWolfertYT" — versie live van de backend.
 class MadeBy extends StatefulWidget {
@@ -23,8 +24,10 @@ class _MadeByState extends State<MadeBy> {
 
   Future<void> _load() async {
     try {
+      final api = ApiService();
+      await api.resolveBase();
       final r = await http
-          .get(Uri.parse('${AppConfig.baseUrl}/version'),
+          .get(Uri.parse('${api.base}/version'),
               headers: const {'ngrok-skip-browser-warning': '1'})
           .timeout(const Duration(seconds: 8));
       if (r.statusCode == 200 && mounted) {

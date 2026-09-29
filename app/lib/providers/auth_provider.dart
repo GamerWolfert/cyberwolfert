@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../config/constants.dart';
+import '../services/api_service.dart';
 
 class AuthStore {
   static const _key = 'auth_token';
@@ -46,16 +46,30 @@ class AuthProvider extends ChangeNotifier {
     return id;
   }
 
+  /// NGrok toont anders een "bezoek deze site?"-pagina in plaats van JSON;
+  /// die header slaat die waarschuwing over. API-adres: eerst proberen welk
+  /// adres bereikbaar is (thuis LAN, buiten de tunnel).
+  static const Map<String, String> jsonHeaders = {
+    'Content-Type': 'application/json',
+    'ngrok-skip-browser-warning': '1',
+  };
+
+  Future<Uri> apiUri(String path, {bool force = false}) async {
+    final api = ApiService();
+    await api.resolveBase(force: force);
+    return Uri.parse('${api.base}$path');
+  }
+
   Future<void> load() async {
     loading = true;
     notifyListeners();
     try {
       final t = await AuthStore.get();
       if (t != null) {
-        final r = await http.get(
-          Uri.parse('${AppConfig.baseUrl}/auth/me'),
-          headers: {'Authorization': 'Bearer $t'},
-        ).timeout(const Duration(seconds: 8));
+        final r = await http
+            .get(await apiUri('/auth/me'),
+                headers: {'Authorization': 'Bearer $t', 'ngrok-skip-browser-warning': '1'})
+            .timeout(const Duration(seconds: 8));
         if (r.statusCode == 200) {
           user = (jsonDecode(r.body) as Map)['user'] as Map<String, dynamic>?;
         } else {
@@ -69,23 +83,25 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<String?> _auth(String path, Map<String, dynamic> body) async {
-    try {
-      final r = await http
-          .post(Uri.parse('${AppConfig.baseUrl}/auth/$path'),
-              headers: {'Content-Type': 'application/json'},
-              body: jsonEncode(body))
-          .timeout(const Duration(seconds: 12));
-      final j = jsonDecode(r.body) as Map<String, dynamic>;
-      if (r.statusCode != 200) {
-        return (j['error'] ?? 'Mislukt. Probeer opnieuw.').toString();
+    for (var attempt = 0; attempt < 2; attempt++) {
+      try {
+        final r = await http
+            .post(await apiUri('/auth/$path', force: attempt > 0),
+                headers: jsonHeaders, body: jsonEncode(body))
+            .timeout(const Duration(seconds: 15));
+        final j = jsonDecode(r.body) as Map<String, dynamic>;
+        if (r.statusCode != 200) {
+          return (j['error'] ?? 'Mislukt. Probeer opnieuw.').toString();
+        }
+        await AuthStore.set(j['token'] as String?);
+        user = (j['user'] as Map?)?.cast<String, dynamic>();
+        notifyListeners();
+        return null;
+      } catch (_) {
+        if (attempt == 0) continue; // ander adres proberen (LAN ↔ tunnel)
       }
-      await AuthStore.set(j['token'] as String?);
-      user = (j['user'] as Map?)?.cast<String, dynamic>();
-      notifyListeners();
-      return null;
-    } catch (_) {
-      return 'Verbinding mislukt. Controleer of de backend bereikbaar is.';
     }
+    return 'Verbinding mislukt. Controleer of de backend bereikbaar is.';
   }
 
   Future<String?> register(String username, String password, String display,
@@ -113,7 +129,8 @@ class AuthProvider extends ChangeNotifier {
   Future<String?> googleStatus() async {
     try {
       final r = await http
-          .get(Uri.parse('${AppConfig.baseUrl}/auth/google-status'))
+          .get(await apiUri('/auth/google-status'),
+              headers: {'ngrok-skip-browser-warning': '1'})
           .timeout(const Duration(seconds: 8));
       final j = jsonDecode(r.body) as Map<String, dynamic>;
       return (j['configured'] == true) ? null : 'Google-login is nog niet ingesteld (GOOGLE_CLIENT_ID ontbreekt).';

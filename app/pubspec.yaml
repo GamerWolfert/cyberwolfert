@@ -1,7 +1,7 @@
 name: cyberwolfert_browser
 description: CyberWolfert Browser met WolfPulse zoekmachine en CyberWolf AI-assistent.
 publish_to: 'none'
-version: 2.5.1+25
+version: 2.5.2+26
 
 environment:
   sdk: '>=3.2.0 <4.0.0'
