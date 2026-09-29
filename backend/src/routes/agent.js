@@ -13,7 +13,14 @@ const { effectivePerms } = require('../perms');
 const { log } = require('../discord');
 const router = express.Router();
 
-const ALLOWED = ['python3', 'python', 'node', 'bash', 'ls', 'cat', 'echo', 'mkdir', 'pwd', 'head', 'tail', 'wc', 'touch', 'date'];
+const ALLOWED = [
+  'python3', 'python', 'node', 'bash', 'ls', 'cat', 'echo', 'mkdir', 'pwd',
+  'head', 'tail', 'wc', 'touch', 'date',
+  'grep', 'find', 'sort', 'uniq', 'cut', 'stat', 'du', 'df', 'file', 'which',
+  'whoami', 'basename', 'dirname', 'seq', 'tr', 'nl', 'id', 'uname',
+];
+// Commando's die iets mogen schrijven: alleen RELATIEVE paden in de werkmap.
+const WRITE_BINS = new Set(['python3', 'python', 'node', 'bash', 'echo', 'mkdir', 'touch']);
 const MAX_STEPS = 6;
 const MAX_FILE = 60 * 1024;
 const CMD_TIMEOUT = 20000;
@@ -58,7 +65,16 @@ Regels:
 - 1 tot ${MAX_STEPS} stappen.
 - Paden RELATIEF (nooit beginnen met /, nooit .. bevatten), bestanden komen in de werkmap.
 - cmd mag alleen starten met: ${ALLOWED.join(', ')}.
-- Geen pipes, geen ;, geen &&, geen redirect (> <).
+- Geen pipes (|), geen ;, geen &&, geen redirect (> <), geen $ of backticks.
+- Zoeken, filteren of tellen mag met de leescommando's (ls, grep, find, wc, head,
+  tail, stat, du) — maar dan ZONDER pipe — of met een python3-script:
+  maak het bestand met type "file" en draai het met "python3 <pad>".
+- Schrijvende commando's (python3, node, bash, echo, mkdir, touch) gebruiken
+  ALLEEN relatieve paden in de werkmap. Leescommando's mogen ook absolute paden
+  gebruiken, bijv. "ls /home/wolfert/cyberwolfert/backend".
+- Een bestand aanmaken doe je ALTIJD met een stap van type "file" (pad + content),
+  NOOIT met echo/printf en een >-teken — dat wordt geweigerd.
+  Voorbeeld: {"summary":"Maakt test.txt","steps":[{"type":"file","path":"test.txt","content":"hallo wereld"},{"type":"cmd","cmd":"cat test.txt"}]}
 - Schrijf werkende, complete code (python3/node/bash).
 - GEEN tests, geen asserts, geen self-checks in het script: alleen doen wat de gebruiker vroeg.
 - Gebruik geen interactieve input (input()/prompt), want het script draait automatisch.
@@ -80,22 +96,31 @@ function looseJson(text) {
   }
 }
 
-async function askPlanner(goal, retry) {
+async function askPlanner(goal, hint) {
   const model = process.env.AI_CODE_MODEL || 'qwen2.5-coder:3b';
   let u = process.env.OLLAMA_URL || 'http://127.0.0.1:11434/api/chat';
   if (!/\/api\/chat$/.test(u)) u = u.replace(/\/$/, '') + '/api/chat';
-  const sys = plannerPrompt(goal) + (retry ? '\nJE ANTWOORD WAS GEEN GELDIGE JSON. ALLEEN JSON, BEGINNEN MET { EN EINDIGEND MET }.' : '');
+  const sys = plannerPrompt(goal) +
+    (hint
+      ? `\nJE VORIGE PLAN IS AFGEKEURD: ${hint}\n` +
+        'Je mag ALLEEN deze commando\'s gebruiken en GEEN pipes/redirects/;/$/` : ' +
+        `${ALLOWED.join(', ')}. ` +
+        'Zonder pipe kun je tellen/filteren met een python3-script: maak het ' +
+        'bestand (type "file") en draai het met "python3 <pad>".\n' +
+        'Lever opnieuw ALLEEN geldige JSON die dit probleem oplost.'
+      : '');
   const r = await fetchTimeout(u, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model,
       stream: false,
+      format: 'json', // dwingt geldige JSON af bij Ollama
       messages: [
         { role: 'system', content: sys },
         { role: 'user', content: goal },
       ],
-      options: { num_predict: 900, temperature: 0.1, top_p: 0.9, num_ctx: 4096, repeat_penalty: 1.02, keep_alive: '15m' },
+      options: { num_predict: 1200, temperature: 0.1, top_p: 0.9, num_ctx: 4096, repeat_penalty: 1.02, keep_alive: '15m' },
     }),
   }, 90000);
   if (!r.ok) throw new Error(`ollama http ${r.status}`);
@@ -115,9 +140,16 @@ function badPath(p) {
 function badCmd(c) {
   const s = String(c || '').trim();
   if (!s || s.length > 400) return true;
-  if (/[;|&`$><]/.test(s)) return true;
-  const bin = s.split(/\s+/)[0];
+  // geen shell-magic: pipes, redirects, sleepjes, variabelen of subshell
+  if (/[;&`$><|]/.test(s)) return true;
+  if (s.includes('..')) return true;
+  const toks = s.split(/\s+/);
+  const bin = toks[0];
   if (!ALLOWED.includes(bin)) return true;
+  // schrijvende commando's blijven binnen de eigen werkmap
+  if (WRITE_BINS.has(bin) && toks.slice(1).some((t) => t.startsWith('/') || t.startsWith('~'))) {
+    return true;
+  }
   return false;
 }
 
@@ -162,14 +194,21 @@ router.post('/plan', agentGate, async (req, res) => {
   if (goal.length < 3) return res.status(400).json({ error: 'doel ontbreekt' });
   let raw;
   try {
-    raw = await askPlanner(goal, false);
+    raw = await askPlanner(goal, '');
   } catch (e) {
     return res.status(502).json({ error: 'planner_offline', detail: String(e.message || e).slice(0, 200) });
   }
   let plan = validate(raw, goal);
   if (plan.error) {
     try {
-      plan = validate(await askPlanner(goal, true), goal);
+      const raw2 = await askPlanner(goal, plan.error);
+      const plan2 = validate(raw2, goal);
+      if (!plan2.error) {
+        plan = plan2;
+        raw = raw2;
+      } else {
+        plan = plan2;
+      }
     } catch (_) {}
   }
   if (plan.error) return res.status(422).json({ error: plan.error, raw: String(raw).slice(0, 600) });
