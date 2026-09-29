@@ -77,7 +77,8 @@ CREATE TABLE IF NOT EXISTS ws_messages (
   channel_id INT REFERENCES ws_channels(id) ON DELETE CASCADE,
   user_id INT REFERENCES users(id) ON DELETE SET NULL,
   body TEXT NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  expires_at TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS idx_ws_messages_channel ON ws_messages(channel_id, id DESC);
 CREATE TABLE IF NOT EXISTS ws_dms (
@@ -85,9 +86,33 @@ CREATE TABLE IF NOT EXISTS ws_dms (
   from_id INT REFERENCES users(id) ON DELETE CASCADE,
   to_id INT REFERENCES users(id) ON DELETE CASCADE,
   body TEXT NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  expires_at TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS idx_ws_dms_pair ON ws_dms(from_id, to_id, id DESC);
+
+-- Verdwijnende berichten: 20s nadat iedereen ze gelezen heeft
+CREATE TABLE IF NOT EXISTS ws_message_reads (
+  message_id INT REFERENCES ws_messages(id) ON DELETE CASCADE,
+  user_id INT REFERENCES users(id) ON DELETE CASCADE,
+  read_at TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (message_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_ws_message_reads_msg ON ws_message_reads(message_id);
+
+-- Bewaard log voor admin-paneel + Discord (berichten zelf zijn weg)
+CREATE TABLE IF NOT EXISTS ws_message_log (
+  id SERIAL PRIMARY KEY,
+  kind VARCHAR(16) NOT NULL,
+  ref_id INT,
+  message_id INT,
+  user_id INT,
+  username VARCHAR(64),
+  body TEXT,
+  reason VARCHAR(24),
+  deleted_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_ws_message_log_time ON ws_message_log(deleted_at DESC);
 
 -- WolfSyn-profiel los van browser-loginnaam
 CREATE TABLE IF NOT EXISTS ws_profiles (
@@ -202,3 +227,58 @@ INSERT INTO custom_links (user_id, keyword, title, url, description, priority)
 SELECT id, 'wolfbos', 'Wolfbos Dashboard', 'http://192.168.1.42:43711/', 'Lokaal dashboard op Mini-PC', 1000
 FROM users WHERE username='wolfert'
 ON CONFLICT DO NOTHING;
+
+-- 11. Eigen e-mail (mailboxen op eigen domein, host op de Mini-PC)
+CREATE TABLE IF NOT EXISTS mail_domains (
+  id SERIAL PRIMARY KEY,
+  domain VARCHAR(255) NOT NULL UNIQUE,
+  is_default BOOLEAN NOT NULL DEFAULT FALSE,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS mail_mailboxes (
+  id SERIAL PRIMARY KEY,
+  localpart VARCHAR(64) NOT NULL,
+  domain_id INT NOT NULL REFERENCES mail_domains(id) ON DELETE CASCADE,
+  owner_user_id INT REFERENCES users(id) ON DELETE SET NULL,
+  display_name VARCHAR(128),
+  created_by INT REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_mail_mailboxes_addr
+  ON mail_mailboxes (domain_id, LOWER(localpart));
+CREATE TABLE IF NOT EXISTS mail_access (
+  id SERIAL PRIMARY KEY,
+  mailbox_id INT NOT NULL REFERENCES mail_mailboxes(id) ON DELETE CASCADE,
+  user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role VARCHAR(16) NOT NULL DEFAULT 'full',
+  granted_by INT REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (mailbox_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS mail_messages (
+  id SERIAL PRIMARY KEY,
+  mailbox_id INT NOT NULL REFERENCES mail_mailboxes(id) ON DELETE CASCADE,
+  dir VARCHAR(4) NOT NULL DEFAULT 'in',
+  from_addr VARCHAR(255) NOT NULL,
+  to_addr VARCHAR(255) NOT NULL,
+  subject TEXT NOT NULL DEFAULT '',
+  body_text TEXT NOT NULL DEFAULT '',
+  body_html TEXT NOT NULL DEFAULT '',
+  is_read BOOLEAN NOT NULL DEFAULT FALSE,
+  code VARCHAR(32),
+  external_id VARCHAR(160),
+  received_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_mail_messages_box
+  ON mail_messages (mailbox_id, received_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_mail_messages_ext
+  ON mail_messages (external_id) WHERE external_id IS NOT NULL;
+
+INSERT INTO mail_domains (domain, is_default, active)
+SELECT 'cyberwolfert.nl', true, true
+WHERE NOT EXISTS (SELECT 1 FROM mail_domains)
+ON CONFLICT (domain) DO NOTHING;
+
+UPDATE site_roles SET permissions = permissions || '{"mail.manage": true}'::jsonb
+ WHERE name = 'admin' AND NOT (permissions ? 'mail.manage');

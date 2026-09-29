@@ -16,8 +16,11 @@ const proxyRouter = require('./routes/proxy');
 const authRouter = require('./routes/auth');
 const wolfsynRouter = require('./routes/wolfsyn');
 const adminRouter = require('./routes/admin');
+const agentRouter = require('./routes/agent');
+const mailRouter = require('./routes/mail');
 const { authOptional } = require('./auth');
 const { pool } = require('./db');
+const { startSmtp } = require('./smtp');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -81,10 +84,12 @@ app.get('/api/health', async (req, res) => {
 app.use('/api/auth', authRouter);
 app.use('/api/wolf', wolfsynRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/mail', mailRouter);
 app.use('/api', authOptional);
 app.use('/api/settings', settingsRouter);
 app.use('/api/search', searchRouter);
 app.use('/api/ai', aiRouter);
+app.use('/api/ai/agent', agentRouter);
 app.use('/api', systemRouter);
 app.use('/api', proxyRouter);
 
@@ -169,6 +174,7 @@ app.listen(PORT, HOST, () => {
   console.log(`[CyberWolfert] backend live op http://${HOST}:${PORT}`);
   if (process.env.PUBLIC_URL) console.log(`[CyberWolfert] publiek via tunnel: ${process.env.PUBLIC_URL}`);
   startPresence();
+  startSmtp();
   const { send, CHANNELS } = require('./discord');
   send(CHANNELS.minipcSysteem, `Backend (her)start op poort ${PORT} — ${new Date().toISOString().slice(0, 19)}Z`);
 });

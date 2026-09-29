@@ -1,9 +1,9 @@
 {
     "app":  "CyberWolfert Browser",
-    "version":  "2.1.0",
-    "build":  19,
+    "version":  "2.3.0",
+    "build":  20,
     "minVersion":  "1.0.0",
-    "notes":  "Admin-paneel met 80+ opties, gebruikersbeheer, Google-like zoekpagina, gast-login poort, achtergrond per account.",
-    "updatedAt":  "2026-09-28",
+    "notes":  "Eigen mail (naam@domein) op de Mini-PC met inbox, verificatiecodes en toegang/eigendom per gebruiker; AI-agent met toestemmingsflow; WolfSyn-berichten verdwijnen na lezen; apps verbinden nu automatisch via LAN én internet.",
+    "updatedAt":  "2026-09-29",
     "iosUrl":  ""
 }

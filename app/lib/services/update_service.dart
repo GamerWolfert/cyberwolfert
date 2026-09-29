@@ -3,15 +3,17 @@ import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
-import '../config/constants.dart';
+import 'api_service.dart';
 
 /// Update-check: vergelijkt build-nummer met backend/version.json.
 class UpdateService {
-  static const int currentBuild = 19;
+  static const int currentBuild = 20;
 
   static Future<Map<String, dynamic>?> _fetch(String path) async {
     try {
-      final r = await http.get(Uri.parse('${AppConfig.baseUrl}$path'),
+      final api = ApiService();
+      await api.resolveBase();
+      final r = await http.get(Uri.parse('${api.base}$path'),
           headers: const {'ngrok-skip-browser-warning': '1'}).timeout(const Duration(seconds: 8));
       if (r.statusCode != 200) return null;
       return jsonDecode(r.body) as Map<String, dynamic>;

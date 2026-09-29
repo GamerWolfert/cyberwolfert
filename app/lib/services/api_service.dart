@@ -1,11 +1,55 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../config/constants.dart';
 import '../providers/auth_provider.dart';
 
 /// Alle netwerkcalls naar de backend (token automatisch mee, nooit adressen in fouten).
+///
+/// Verbinding: de app onthoudt welk adres (LAN of internet-tunnel) het doet en
+/// valt automatisch terug als de verbinding wegvalt, zodat de apps nooit
+/// onnodig 'offline' zijn.
 class ApiService {
-  String get base => AppConfig.baseUrl;
+  static String? _active;
+  static Future<bool>? _probe;
+
+  String get base => _active ?? AppConfig.baseUrl;
+
+  Future<bool> resolveBase({bool force = false}) {
+    if (!force && _active != null) return Future.value(true);
+    if (_probe != null) return _probe!;
+    _probe = _doResolve().whenComplete(() => _probe = null);
+    return _probe!;
+  }
+
+  Future<bool> _doResolve() async {
+    final cands = AppConfig.candidates;
+    if (cands.isEmpty) return false;
+    final found = await _firstOk(cands);
+    if (found != null) {
+      _active = found;
+      return true;
+    }
+    return _active != null;
+  }
+
+  /// Raced alle kandidaten; wie het eerst /version 200 teruggeeft wint.
+  Future<String?> _firstOk(List<String> cands) {
+    final c = Completer<String?>();
+    var left = cands.length;
+    for (final u in cands) {
+      () async {
+        try {
+          final r = await http
+              .get(Uri.parse('$u/version'), headers: await _h())
+              .timeout(const Duration(seconds: 5));
+          if (r.statusCode == 200 && !c.isCompleted) c.complete(u);
+        } catch (_) {}
+        if (--left == 0 && !c.isCompleted) c.complete(null);
+      }();
+    }
+    return c.future;
+  }
 
   Future<Map<String, String>> _h({bool json = false}) async {
     final m = <String, String>{
@@ -18,15 +62,25 @@ class ApiService {
   }
 
   Future<T> _guard<T>(String wat, Future<T> Function() fn) async {
+    await resolveBase();
     try {
       return await fn().timeout(const Duration(seconds: 15));
-    } catch (_) {
+    } catch (e) {
+      // Misschien is een ander adres bereikbaar (thuis LAN, buiten tunnel):
+      // één keer opnieuw proberen, daarna de originele fout tonen.
+      if (await resolveBase(force: true)) {
+        try {
+          return await fn().timeout(const Duration(seconds: 15));
+        } catch (_) {}
+      }
+      if (e is Exception) rethrow;
       throw Exception('$wat is mislukt. Controleer de verbinding en probeer opnieuw.');
     }
   }
 
-  Future<bool> health() async {
+  Future<bool> health({bool force = false}) async {
     try {
+      await resolveBase(force: force);
       final v = await http
           .get(Uri.parse('$base/version'), headers: await _h())
           .timeout(const Duration(seconds: 6));
@@ -153,6 +207,30 @@ class ApiService {
         final j = jsonDecode(body) as Map<String, dynamic>;
         if (streamed.statusCode != 200) throw Exception('bad status');
         return (j['reply'] ?? '') as String;
+      });
+
+  // --- Remote agent: AI maakt een plan, jij geeft toestemming, Mini-PC voert uit ---
+  Future<Map<String, dynamic>> agentPlan(String goal) =>
+      _guard('Agent: plan maken', () async {
+        final r = await http.post(Uri.parse('$base/ai/agent/plan'),
+            headers: await _h(json: true), body: jsonEncode({'goal': goal}));
+        if (r.statusCode != 200) throw Exception(_apiFout(r.body));
+        return jsonDecode(r.body) as Map<String, dynamic>;
+      });
+
+  Future<Map<String, dynamic>> agentRun(String id) =>
+      _guard('Agent: uitvoeren', () async {
+        final r = await http.post(Uri.parse('$base/ai/agent/run'),
+            headers: await _h(json: true), body: jsonEncode({'id': id}));
+        if (r.statusCode != 200) throw Exception(_apiFout(r.body));
+        return jsonDecode(r.body) as Map<String, dynamic>;
+      });
+
+  Future<Map<String, dynamic>> agentStatus() => _guard('Agent: status', () async {
+        final r = await http.get(Uri.parse('$base/ai/agent/status'),
+            headers: await _h());
+        if (r.statusCode != 200) throw Exception(_apiFout(r.body));
+        return jsonDecode(r.body) as Map<String, dynamic>;
       });
 
   Future<String> uploadImage(String filePath, String fileName) =>

@@ -17,6 +17,7 @@ import '../services/sound_service.dart';
 import 'downloads_screen.dart';
 import 'login_screen.dart';
 import 'wolfsyn_screen.dart';
+import 'mail_screen.dart';
 import 'search_results_screen.dart';
 import 'admin_screen.dart';
 
@@ -325,6 +326,14 @@ class _BrowserHomeScreenState extends State<BrowserHomeScreen> {
             onPressed: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const WolfSynScreen()),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.mail),
+            tooltip: 'Mail',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const MailScreen()),
             ),
           ),
         ],

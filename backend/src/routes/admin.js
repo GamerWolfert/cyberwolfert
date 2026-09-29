@@ -302,6 +302,15 @@ router.get('/logs/logins', requirePerm('logs.logins'), async (req, res) => {
   res.json(r.rows);
 });
 
+// Verwijderde/verdwenen WolfSyn-berichten (berichten zelf zijn weg, log blijft).
+router.get('/logs/wolfsyn', requirePerm('wolf.servers'), async (req, res) => {
+  const limit = Math.min(Number(req.query.limit || 50), 200);
+  const r = await db.query(
+    `SELECT kind, ref_id, message_id, COALESCE(username, '?') AS username, body, reason, deleted_at
+     FROM ws_message_log ORDER BY deleted_at DESC LIMIT $1`, [limit]);
+  res.json(r.rows);
+});
+
 // --- Site ---
 router.get('/site/settings', requirePerm('site.stats'), async (req, res) => {
   const r = await db.query('SELECT key, value FROM site_settings');

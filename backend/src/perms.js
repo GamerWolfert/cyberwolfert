@@ -33,8 +33,12 @@ const PERMS = {
   'WolfSyn & AI': [
     ['wolf.servers', 'WolfSyn-servers bekijken/verwijderen'],
     ['ai.memory', 'AI-geheugen van gebruikers wissen'],
-    ['ai.engine', 'AI-engine instellingen'],
+    ['ai.engine', 'AI-engine instellen'],
+    ['agent.run', 'AI-agent op de Mini-PC laten uitvoeren'],
     ['mail.test', 'Testmail versturen'],
+  ],
+  'E-mail': [
+    ['mail.manage', 'Mailboxen aanmaken, toegang geven, eigendom overdragen'],
   ],
 };
 

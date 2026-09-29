@@ -441,6 +441,7 @@ class _ServerScreenState extends State<ServerScreen> {
   int? _channelId;
   bool _busy = true;
   Timer? _poll;
+  Timer? _tick;
 
   @override
   void initState() {
@@ -449,11 +450,18 @@ class _ServerScreenState extends State<ServerScreen> {
     _poll = Timer.periodic(const Duration(seconds: 4), (_) {
       if (mounted && _channelId != null) _loadMessages(silent: true);
     });
+    _tick = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      final live = _messages
+          .any((m) => m is Map && m['expires_at'] != null);
+      if (live) setState(() {});
+    });
   }
 
   @override
   void dispose() {
     _poll?.cancel();
+    _tick?.cancel();
     _msg.dispose();
     super.dispose();
   }
@@ -616,6 +624,8 @@ class _ServerScreenState extends State<ServerScreen> {
                                         ],
                                       ),
                                       Text((m['body'] ?? '').toString()),
+                                      if (m['expires_at'] != null)
+                                        _expiry(m['expires_at']),
                                     ],
                                   ),
                                 ),
@@ -635,7 +645,7 @@ class _ServerScreenState extends State<ServerScreen> {
                       controller: _msg,
                       onSubmitted: (_) => _send(),
                       decoration: const InputDecoration(
-                          hintText: 'Bericht…',
+                          hintText: 'Bericht…  (/delete om te wissen)',
                           border: OutlineInputBorder()),
                     ),
                   ),
@@ -646,6 +656,23 @@ class _ServerScreenState extends State<ServerScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _expiry(dynamic raw) {
+    final exp = raw?.toString();
+    if (exp == null || exp.isEmpty) return const SizedBox.shrink();
+    final dt = DateTime.tryParse(exp)?.toLocal();
+    if (dt == null) return const SizedBox.shrink();
+    final left = dt.difference(DateTime.now()).inSeconds;
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: Text(
+        left <= 0
+            ? '⏳ verdwijnt zo…'
+            : '⏳ verdwijnt over ${left}s (als iedereen het gelezen heeft)',
+        style: const TextStyle(fontSize: 10, color: Colors.amberAccent),
       ),
     );
   }
@@ -901,6 +928,7 @@ class _DmScreenState extends State<DmScreen> {
   final _msg = TextEditingController();
   List<dynamic> _messages = [];
   Timer? _poll;
+  Timer? _tick;
   int? _me;
 
   @override
@@ -913,11 +941,18 @@ class _DmScreenState extends State<DmScreen> {
     _poll = Timer.periodic(const Duration(seconds: 4), (_) {
       if (mounted) _load();
     });
+    _tick = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      final live = _messages
+          .any((m) => m is Map && m['expires_at'] != null);
+      if (live) setState(() {});
+    });
   }
 
   @override
   void dispose() {
     _poll?.cancel();
+    _tick?.cancel();
     _msg.dispose();
     super.dispose();
   }
@@ -936,7 +971,22 @@ class _DmScreenState extends State<DmScreen> {
     try {
       await _api.sendDm(widget.userId, t);
       _load();
-    } catch (_) {}
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content:
+                Text(e.toString().replaceFirst('Exception: ', ''))));
+      }
+    }
+  }
+
+  String _dmExpiry(dynamic raw) {
+    final dt = DateTime.tryParse(raw?.toString() ?? '')?.toLocal();
+    if (dt == null) return '⏳ verdwijnt zo…';
+    final left = dt.difference(DateTime.now()).inSeconds;
+    return left <= 0
+        ? '⏳ verdwijnt zo…'
+        : '⏳ verdwijnt over ${left}s';
   }
 
   @override
@@ -968,7 +1018,21 @@ class _DmScreenState extends State<DmScreen> {
                           : Colors.white10,
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Text((m['body'] ?? '').toString()),
+                    child: Column(
+                      crossAxisAlignment: me
+                          ? CrossAxisAlignment.end
+                          : CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text((m['body'] ?? '').toString()),
+                        if (m['expires_at'] != null)
+                          Text(
+                            _dmExpiry(m['expires_at']),
+                            style: const TextStyle(
+                                fontSize: 10, color: Colors.amberAccent),
+                          ),
+                      ],
+                    ),
                   ),
                 );
               },

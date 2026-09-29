@@ -4,6 +4,7 @@
 // thuisnetwerk levert vrijwel niets af (geen PTR/reputatie, poort 25 dicht),
 // daarom: eigen afzender-naam + relay. Config via config.env (MAIL_*).
 const nodemailer = require('nodemailer');
+const { deliverLocal, extractCode } = require('./smtp');
 
 let transporter = null;
 
@@ -60,14 +61,31 @@ Dit is een automatisch bericht van CyberWolfert. Reageer hier niet op.
 </body></html>`;
 }
 
-async function sendMail(to, subject, html) {
+// Verstuurt een mail. Eigen adressen (naam@onze-domeinen) worden direct in de
+// mailbox op de Mini-PC bezorgd — dus ook verificatiemails van de site zelf
+// komen in de webmail terecht zodra je je adres als mailbox hebt aangemaakt.
+async function sendMail(to, subject, html, text) {
+  const plain = text || String(html || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  try {
+    const local = await deliverLocal(to, {
+      from: process.env.MAIL_FROM || 'no-reply@cyberwolfert.nl',
+      subject,
+      html,
+      text: plain,
+      code: extractCode(plain),
+      externalId: null,
+    });
+    if (local) return { sent: true, local: true };
+  } catch (e) {
+    console.warn('[mail] lokale bezorging mislukt:', e.message);
+  }
   const t = getTransporter();
   if (!t) {
     console.warn('[mail] niet ingesteld (MAIL_HOST ontbreekt), mail naar', to, 'overgeslagen');
-    return { sent: false, reason: 'mail_niet_ingesteld' };
+    return { sent: false, reason: 'relay_niet_ingesteld' };
   }
   try {
-    await t.sendMail({ from: fromLine(), to, subject, html });
+    await t.sendMail({ from: fromLine(), to, subject, html, text: plain });
     return { sent: true };
   } catch (e) {
     console.error('[mail] verzenden mislukt:', e.message);

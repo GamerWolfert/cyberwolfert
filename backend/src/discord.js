@@ -11,6 +11,7 @@ const CHANNELS = {
   cwErrors: process.env.DC_CW_ERRORS,
   appsUpdates: process.env.DC_APPS_UPDATES,
   appsErrors: process.env.DC_APPS_ERRORS,
+  wolfsyn: process.env.DC_CW_WOLFSYN,
   gamesLogs: process.env.DC_GAMES_LOGS,
   gamesCommandos: process.env.DC_GAMES_COMMANDOS,
   wolfbosPanel: process.env.DC_WOLFBOS_PANEL,
@@ -64,6 +65,8 @@ const log = {
     send(CHANNELS.cwErrors, `⚠️ \`${stamp()}\` **${waar}**: ${String(wat).slice(0, 1500)}`),
   update: (versie, notes) =>
     send(CHANNELS.appsUpdates, `📱 \`${stamp()}\` **CyberWolfert ${versie}** gepubliceerd: ${notes}`.slice(0, 1900)),
+  wolfsyn: (msg) =>
+    send(CHANNELS.wolfsyn, `🗑️ \`${stamp()}\` ${String(msg).slice(0, 1800)}`),
 };
 
 module.exports = { log, send, CHANNELS, naamOf };

@@ -10,9 +10,13 @@ const path = require('path');
 const fs = require('fs');
 const db = require('../db');
 const { authRequired } = require('../auth');
+const { log } = require('../discord');
 const router = express.Router();
 
 router.use(authRequired);
+
+// Berichten verdwijnen zodra iedereen ze gelezen heeft + dit aantal seconden.
+const EPHEMERAL_SECONDS = 20;
 
 function code() {
   const abc = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -48,6 +52,124 @@ async function canDo(uid, serverId, right) {
 function esc(s) {
   return String(s || '').slice(0, 2000);
 }
+
+// --- Verdwijnende berichten (WolfSyn) ---
+async function isAdminUser(uid) {
+  try {
+    const r = await db.query('SELECT is_admin FROM users WHERE id=$1', [uid]);
+    return !!r.rows[0]?.is_admin;
+  } catch {
+    return false;
+  }
+}
+
+async function membersOf(sid) {
+  const r = await db.query(
+    `SELECT owner_id AS id FROM ws_servers WHERE id=$1
+     UNION SELECT user_id FROM ws_members WHERE server_id=$1`,
+    [sid]
+  );
+  return r.rows.map((x) => Number(x.id));
+}
+
+// Markeert berichten als gelezen door uid en zet expires_at als ALLES gelezen is.
+async function markChannelRead(channelId, uid, messageIds) {
+  const ids = (messageIds || []).map(Number).filter((n) => n > 0);
+  if (!ids.length) return [];
+  try {
+    const sid = await channelServer(channelId);
+    if (!sid) return [];
+    await db.query(
+      `INSERT INTO ws_message_reads (message_id, user_id)
+       SELECT unnest($1::int[]), $2 ON CONFLICT DO NOTHING`,
+      [ids, uid]
+    );
+    const members = await membersOf(sid);
+    if (!members.length) return [];
+    const r = await db.query(
+      `SELECT m.id FROM ws_messages m
+        WHERE m.channel_id=$1 AND m.expires_at IS NULL AND m.id = ANY($2::int[])
+          AND NOT EXISTS (
+            SELECT 1 FROM unnest($3::int[]) x(id)
+             WHERE NOT EXISTS (
+               SELECT 1 FROM ws_message_reads rr WHERE rr.message_id = m.id AND rr.user_id = x.id
+             )
+          )`,
+      [channelId, ids, members]
+    );
+    if (r.rows.length) {
+      const upd = await db.query(
+        `UPDATE ws_messages SET expires_at = NOW() + ($2 || ' seconds')::interval
+          WHERE id = ANY($1::int[]) RETURNING id, expires_at`,
+        [r.rows.map((x) => x.id), String(EPHEMERAL_SECONDS)]
+      );
+      return upd.rows;
+    }
+  } catch (_) {}
+  return [];
+}
+
+// Verwijderen + bewaren in ws_message_log (admin-paneel) en Discord.
+async function purgeMessage(row, kind, refId, reason, byUid) {
+  try {
+    const u = await db.query('SELECT username FROM users WHERE id=$1', [row.user_id]);
+    await db.query(
+      `INSERT INTO ws_message_log (kind, ref_id, message_id, user_id, username, body, reason)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [kind, refId, row.id, row.user_id, u.rows[0]?.username || null, row.body, reason]
+    );
+    await db.query('DELETE FROM ws_messages WHERE id=$1', [row.id]);
+    if (reason !== 'expire') {
+      const wie = byUid ? `door \`user#${byUid}\`` : 'automatisch';
+      log.wolfsyn(
+        `**WolfSyn bericht verwijderd** (${wie}) in kanaal #${refId}: ` +
+          String(row.body || '').replace(/\n/g, ' ').slice(0, 300)
+      );
+    }
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function purgeDm(row, reason, byUid) {
+  try {
+    const u = await db.query('SELECT username FROM users WHERE id=$1', [row.from_id]);
+    await db.query(
+      `INSERT INTO ws_message_log (kind, ref_id, message_id, user_id, username, body, reason)
+       VALUES ('dm',$1,$2,$3,$4,$5,$6)`,
+      [row.to_id, row.id, row.from_id, u.rows[0]?.username || null, row.body, reason]
+    );
+    await db.query('DELETE FROM ws_dms WHERE id=$1', [row.id]);
+    if (reason !== 'expire') {
+      const wie = byUid ? `door \`user#${byUid}\`` : 'automatisch';
+      log.wolfsyn(
+        `**WolfSyn DM verwijderd** (${wie}) user#${row.from_id} -> user#${row.to_id}: ` +
+          String(row.body || '').replace(/\n/g, ' ').slice(0, 300)
+      );
+    }
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+// Ruimt alles op waar de teller verstreken is (elke 5 seconden).
+async function sweepEphemeral() {
+  try {
+    const m = await db.query(
+      `SELECT * FROM ws_messages WHERE expires_at IS NOT NULL AND expires_at <= NOW() ORDER BY id`
+    );
+    for (const row of m.rows) await purgeMessage(row, 'channel', row.channel_id, 'expire', null);
+    const d = await db.query(`SELECT * FROM ws_dms WHERE expires_at IS NOT NULL AND expires_at <= NOW() ORDER BY id`);
+    for (const row of d.rows) await purgeDm(row, 'expire', null);
+    if (m.rows.length || d.rows.length) {
+      log.wolfsyn(`**${m.rows.length + d.rows.length} bericht(en)** automatisch verdwenen na lezing +${EPHEMERAL_SECONDS}s`);
+    }
+  } catch (_) {}
+}
+const sweeper = setInterval(sweepEphemeral, 5000);
+if (sweeper.unref) sweeper.unref();
 
 // --- Servers ---
 router.get('/servers', async (req, res) => {
@@ -192,7 +314,14 @@ router.get('/channels/:id/messages', async (req, res) => {
      WHERE m.channel_id=$1 ${before ? 'AND m.id < $3' : ''} ORDER BY m.id DESC LIMIT $2`,
     before ? [req.params.id, limit, before] : [req.params.id, limit]
   );
-  res.json(r.rows.reverse());
+  const rows = r.rows.reverse();
+  // Lezen = markeren; als iedereen gelezen heeft, start de teller van 20 seconden.
+  const tick = await markChannelRead(req.params.id, req.userId, rows.map((x) => x.id));
+  if (tick.length) {
+    const m = new Map(tick.map((x) => [x.id, x.expires_at]));
+    for (const row of rows) if (m.has(row.id)) row.expires_at = m.get(row.id);
+  }
+  res.json(rows);
 });
 
 router.post('/channels/:id/messages', async (req, res) => {
@@ -200,6 +329,27 @@ router.post('/channels/:id/messages', async (req, res) => {
   if (!sid || !(await isMember(req.userId, sid))) return res.status(403).json({ error: 'geen lid' });
   const body = esc(req.body?.body);
   if (!body) return res.status(400).json({ error: 'leeg bericht' });
+
+  // /delete [id] -> eigenaar/moderator/admin wis meteen (log blijft bewaard).
+  if (/^\/delete\b/i.test(body)) {
+    const allowed =
+      (await isOwner(req.userId, sid)) ||
+      (await canDo(req.userId, sid, 'manage')) ||
+      (await isAdminUser(req.userId));
+    if (!allowed) return res.status(403).json({ error: 'alleen eigenaar of moderator mag /delete gebruiken' });
+    const arg = body.replace(/^\/delete\s*/i, '').trim();
+    let target;
+    if (/^\d+$/.test(arg)) {
+      target = await db.query('SELECT * FROM ws_messages WHERE id=$1 AND channel_id=$2', [Number(arg), req.params.id]);
+    } else {
+      target = await db.query('SELECT * FROM ws_messages WHERE channel_id=$1 ORDER BY id DESC LIMIT 1', [req.params.id]);
+    }
+    if (!target.rows.length) return res.status(404).json({ error: 'niets om te verwijderen' });
+    const row = target.rows[0];
+    await purgeMessage(row, 'channel', row.channel_id, 'owner_delete', req.userId);
+    return res.json({ ok: true, deleted: row.id });
+  }
+
   const r = await db.query(
     'INSERT INTO ws_messages (channel_id, user_id, body) VALUES ($1,$2,$3) RETURNING *',
     [req.params.id, req.userId, body]
@@ -226,6 +376,12 @@ router.get('/dms/:uid', async (req, res) => {
   const other = Number(req.params.uid);
   const limit = Math.min(Number(req.query.limit || 50), 100);
   const before = Number(req.query.before || 0);
+  // Lezen = de conversatie openen: alles wat aan mij gestuurd is vervagt 20s hierna.
+  await db.query(
+    `UPDATE ws_dms SET expires_at = NOW() + ($3 || ' seconds')::interval
+      WHERE from_id=$1 AND to_id=$2 AND expires_at IS NULL`,
+    [other, req.userId, String(EPHEMERAL_SECONDS)]
+  );
   const r = await db.query(
     `SELECT * FROM ws_dms WHERE ((from_id=$1 AND to_id=$2) OR (from_id=$2 AND to_id=$1))
      ${before ? 'AND id < $4' : ''} ORDER BY id DESC LIMIT $3`,
