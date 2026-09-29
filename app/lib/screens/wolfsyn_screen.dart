@@ -22,6 +22,8 @@ class _WolfSynScreenState extends State<WolfSynScreen>
   late TabController _tabs;
   List<dynamic> _servers = [];
   List<dynamic> _inbox = [];
+  List<dynamic> _groups = [];
+  Map<String, dynamic> _friends = {'friends': [], 'incoming': [], 'outgoing': []};
   Map<String, dynamic>? _profile;
   bool _busy = true;
   String? _error;
@@ -29,7 +31,7 @@ class _WolfSynScreenState extends State<WolfSynScreen>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 2, vsync: this);
+    _tabs = TabController(length: 3, vsync: this);
     _load();
   }
 
@@ -42,11 +44,21 @@ class _WolfSynScreenState extends State<WolfSynScreen>
       final s = await _api.servers();
       final inbox = await _api.inbox();
       final p = await _api.profile();
+      Map<String, dynamic> f = {'friends': [], 'incoming': [], 'outgoing': []};
+      List<dynamic> gs = [];
+      try {
+        f = await _api.friends();
+      } catch (_) {}
+      try {
+        gs = await _api.groups();
+      } catch (_) {}
       if (!mounted) return;
       setState(() {
         _servers = s;
         _inbox = inbox;
         _profile = p;
+        _friends = f;
+        _groups = gs;
         _busy = false;
       });
     } catch (e) {
@@ -111,7 +123,11 @@ class _WolfSynScreenState extends State<WolfSynScreen>
         ],
         bottom: TabBar(
           controller: _tabs,
-          tabs: const [Tab(text: 'Servers'), Tab(text: 'DM\'s')],
+          tabs: const [
+            Tab(text: 'Servers'),
+            Tab(text: 'Vrienden'),
+            Tab(text: 'DM\'s'),
+          ],
         ),
       ),
       body: _busy
@@ -133,14 +149,27 @@ class _WolfSynScreenState extends State<WolfSynScreen>
                   controller: _tabs,
                   children: [
                     _serversTab(),
+                    _friendsTab(),
                     _inboxTab(),
                   ],
                 ),
-      floatingActionButton: FloatingActionButton(
-        tooltip: 'Server maken of joinen',
-        onPressed: _serverDialog,
-        child: const Icon(Icons.add),
-      ),
+      floatingActionButton: _tabs.index == 1
+          ? FloatingActionButton(
+              tooltip: 'Groep met vrienden maken',
+              onPressed: _groupDialog,
+              child: const Icon(Icons.groups),
+            )
+          : _tabs.index == 2
+              ? FloatingActionButton(
+                  tooltip: 'Nieuw gesprek',
+                  onPressed: _dmDialog,
+                  child: const Icon(Icons.person_add),
+                )
+              : FloatingActionButton(
+                  tooltip: 'Server maken of joinen',
+                  onPressed: _serverDialog,
+                  child: const Icon(Icons.add),
+                ),
     );
   }
 
@@ -186,6 +215,328 @@ class _WolfSynScreenState extends State<WolfSynScreen>
           ),
         );
       },
+    );
+  }
+
+  Widget _friendsTab() {
+    final friends = ((_friends['friends'] ?? []) as List).cast<dynamic>();
+    final incoming = ((_friends['incoming'] ?? []) as List).cast<dynamic>();
+    final outgoing = ((_friends['outgoing'] ?? []) as List).cast<dynamic>();
+    final rows = <Widget>[];
+
+    rows.add(Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: _addFriendDialog,
+            icon: const Icon(Icons.person_add_alt),
+            label: const Text('Vriend toevoegen'),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: _groupDialog,
+            icon: const Icon(Icons.groups),
+            label: const Text('Groep maken'),
+          ),
+        ),
+      ]),
+    ));
+
+    if (incoming.isNotEmpty) {
+      rows.add(_sectionHeader('Vriendverzoeken (${incoming.length})'));
+      rows.addAll(incoming.map((r) {
+        final m = r as Map<String, dynamic>;
+        return Card(
+          child: ListTile(
+            leading: _avatar(m['avatar']?.toString(),
+                (m['display'] ?? m['username'] ?? '?').toString(), r: 18),
+            title: Text((m['display'] ?? m['username'] ?? '?').toString()),
+            subtitle: const Text('wil vriend worden'),
+            trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+              IconButton(
+                icon: const Icon(Icons.check_circle, color: Colors.greenAccent),
+                tooltip: 'Accepteren',
+                onPressed: () async {
+                  try {
+                    await _api.respondFriend((m['id'] as num).toInt());
+                    _load();
+                  } catch (e) {
+                    _snack(e);
+                  }
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.cancel, color: Colors.redAccent),
+                tooltip: 'Weigeren',
+                onPressed: () async {
+                  try {
+                    await _api.respondFriend((m['id'] as num).toInt(),
+                        accept: false);
+                    _load();
+                  } catch (e) {
+                    _snack(e);
+                  }
+                },
+              ),
+            ]),
+          ),
+        );
+      }));
+    }
+
+    rows.add(_sectionHeader('Vrienden (${friends.length})'));
+    if (friends.isEmpty) {
+      rows.add(const Padding(
+        padding: EdgeInsets.symmetric(vertical: 12),
+        child: Text('Nog geen vrienden. Voeg iemand toe om te chatten of een groep te maken.',
+            textAlign: TextAlign.center, style: TextStyle(color: Colors.white60)),
+      ));
+    }
+    rows.addAll(friends.map((f) {
+      final m = f as Map<String, dynamic>;
+      return Card(
+        child: ListTile(
+          leading: _avatar(
+              m['avatar']?.toString(),
+              (m['display'] ?? m['username'] ?? '?').toString(),
+              r: 18),
+          title: Text((m['display'] ?? m['username'] ?? '?').toString()),
+          subtitle: Text('@${m['username'] ?? ''}',
+              style: const TextStyle(fontSize: 11)),
+          trailing: PopupMenuButton<String>(
+            onSelected: (v) async {
+              if (v == 'dm') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => DmScreen(
+                          userId: (m['id'] as num).toInt(),
+                          name: (m['display'] ?? m['username'] ?? '?')
+                              .toString())),
+                ).then((_) => _load());
+              } else if (v == 'weg') {
+                try {
+                  await _api.removeFriend((m['id'] as num).toInt());
+                  _load();
+                } catch (e) {
+                  _snack(e);
+                }
+              }
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'dm', child: Text('Bericht sturen')),
+              PopupMenuItem(value: 'weg', child: Text('Vriend verwijderen')),
+            ],
+          ),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => DmScreen(
+                    userId: (m['id'] as num).toInt(),
+                    name: (m['display'] ?? m['username'] ?? '?').toString())),
+          ).then((_) => _load()),
+        ),
+      );
+    }));
+
+    if (outgoing.isNotEmpty) {
+      rows.add(_sectionHeader('Verzonden verzoeken (${outgoing.length})'));
+      rows.addAll(outgoing.map((o) {
+        final m = o as Map<String, dynamic>;
+        return ListTile(
+          leading: _avatar(
+              m['avatar']?.toString(),
+              (m['display'] ?? m['username'] ?? '?').toString(),
+              r: 16),
+          title: Text((m['display'] ?? m['username'] ?? '?').toString()),
+          subtitle: const Text('wacht op reactie'),
+        );
+      }));
+    }
+
+    rows.add(_sectionHeader('Mijn groepen (${_groups.length})'));
+    if (_groups.isEmpty) {
+      rows.add(const Padding(
+        padding: EdgeInsets.symmetric(vertical: 8),
+        child: Text('Nog geen groepen. Maak een groep met je vrienden.',
+            textAlign: TextAlign.center, style: TextStyle(color: Colors.white60)),
+      ));
+    }
+    rows.addAll(_groups.map((g) {
+      final m = g as Map<String, dynamic>;
+      return Card(
+        child: ListTile(
+          leading: const CircleAvatar(child: Icon(Icons.groups, size: 20)),
+          title: Text((m['name'] ?? '').toString()),
+          subtitle: Text(
+              '${m['members'] ?? '?'} leden${(m['last_body'] ?? '').toString().isEmpty ? '' : ' • ${m['last_body']}'}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis),
+          trailing: const Icon(Icons.arrow_forward_ios, size: 14),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => GroupScreen(
+                    groupId: (m['id'] as num).toInt(),
+                    name: (m['name'] ?? '').toString())),
+          ).then((_) => _load()),
+        ),
+      );
+    }));
+
+    rows.add(const SizedBox(height: 72));
+    return ListView(
+        padding: const EdgeInsets.all(12), children: rows);
+  }
+
+  Widget _sectionHeader(String t) => Padding(
+        padding: const EdgeInsets.only(top: 14, bottom: 4),
+        child: Text(t,
+            style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+                color: Colors.white70)),
+      );
+
+  void _snack(Object e) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(e.toString().replaceFirst('Exception: ', ''))));
+  }
+
+  Future<void> _addFriendDialog() async {
+    final q = TextEditingController();
+    List<dynamic> found = [];
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          title: const Text('Vriend toevoegen'),
+          content: SizedBox(
+            width: 320,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: q,
+                  decoration: const InputDecoration(
+                      labelText: 'Gebruikersnaam',
+                      prefixIcon: Icon(Icons.search)),
+                  onChanged: (v) async {
+                    if (v.trim().length < 2) return;
+                    try {
+                      final r = await _api.users(v.trim());
+                      setD(() => found = r);
+                    } catch (_) {}
+                  },
+                ),
+                ...found.map((u) {
+                  final m = u as Map;
+                  return ListTile(
+                    leading: _avatar(m['avatar']?.toString(),
+                        (m['display'] ?? m['username'] ?? '?').toString(),
+                        r: 18),
+                    title: Text((m['display'] ?? m['username'] ?? '?').toString()),
+                    trailing: const Icon(Icons.person_add),
+                    onTap: () async {
+                      try {
+                        await _api.requestFriend((m['username'] ?? '').toString());
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        _load();
+                        _snack('Vriendverzoek verstuurd!');
+                      } catch (e) {
+                        _snack(e);
+                      }
+                    },
+                  );
+                }),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Sluiten')),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _groupDialog() async {
+    final friends = ((_friends['friends'] ?? []) as List).cast<dynamic>();
+    if (friends.isEmpty) {
+      _snack('Voeg eerst vrienden toe om een groep te maken.');
+      return;
+    }
+    final naam = TextEditingController(text: 'Nieuwe groep');
+    final sel = <int>{};
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          title: const Text('Groep met vrienden'),
+          content: SizedBox(
+            width: 320,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                    controller: naam,
+                    decoration: const InputDecoration(labelText: 'Groepsnaam')),
+                const SizedBox(height: 8),
+                ...friends.map((f) {
+                  final m = f as Map<String, dynamic>;
+                  final id = (m['id'] as num).toInt();
+                  return CheckboxListTile(
+                    dense: true,
+                    title: Text(
+                        (m['display'] ?? m['username'] ?? '?').toString()),
+                    value: sel.contains(id),
+                    onChanged: (v) => setD(() {
+                      if (v == true) {
+                        sel.add(id);
+                      } else {
+                        sel.remove(id);
+                      }
+                    }),
+                  );
+                }),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Annuleren')),
+            FilledButton(
+              onPressed: () async {
+                if (sel.isEmpty) return;
+                try {
+                  final g = await _api.createGroup(
+                      naam.text.trim().isEmpty ? 'Groep' : naam.text.trim(),
+                      sel.toList());
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  if (!mounted) return;
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => GroupScreen(
+                            groupId: (g['id'] as num).toInt(),
+                            name: (g['name'] ?? '').toString())),
+                  ).then((_) => _load());
+                } catch (e) {
+                  _snack(e);
+                }
+              },
+              child: const Text('Maken'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -235,6 +586,7 @@ class _WolfSynScreenState extends State<WolfSynScreen>
   Future<void> _serverDialog() async {
     final naam = TextEditingController();
     final code = TextEditingController();
+    final tag = TextEditingController();
     final tab = await showDialog<String>(
       context: context,
       builder: (_) => AlertDialog(
@@ -250,6 +602,12 @@ class _WolfSynScreenState extends State<WolfSynScreen>
                 controller: code,
                 decoration: const InputDecoration(
                     labelText: 'Of join-code plakken')),
+            TextField(
+                controller: tag,
+                maxLength: 24,
+                decoration: const InputDecoration(
+                    labelText: 'Server-tag (achter je naam)',
+                    helperText: 'Bijv. Wolf, Builder, Admin')),
           ],
         ),
         actions: [
@@ -269,16 +627,13 @@ class _WolfSynScreenState extends State<WolfSynScreen>
       if (tab == 'nieuw' && naam.text.trim().isNotEmpty) {
         await _api.createServer(naam.text.trim());
       } else if (tab == 'join' && code.text.trim().isNotEmpty) {
-        await _api.join(code.text.trim());
+        await _api.join(code.text.trim(), tag: tag.text.trim());
       } else {
         return;
       }
       _load();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(e.toString().replaceFirst('Exception: ', ''))));
-      }
+      _snack(e);
     }
   }
 
@@ -438,6 +793,10 @@ class _ServerScreenState extends State<ServerScreen> {
   List<dynamic> _roles = [];
   Map<String, dynamic> _rights = {};
   String _invite = '';
+  String _myTag = '';
+  int _boosts = 0;
+  int _boostLevel = 0;
+  bool _myBoost = false;
   int? _channelId;
   bool _busy = true;
   Timer? _poll;
@@ -470,12 +829,17 @@ class _ServerScreenState extends State<ServerScreen> {
     try {
       final d = await _api.serverDetail(widget.serverId);
       final ch = await _api.channels(widget.serverId);
+      final boost = ((d['boost'] ?? {}) as Map).cast<String, dynamic>();
       if (!mounted) return;
       setState(() {
         _members = (d['members'] ?? []) as List<dynamic>;
         _roles = (d['roles'] ?? []) as List<dynamic>;
         _rights = ((d['myRights'] ?? {}) as Map).cast<String, dynamic>();
         _invite = ((d['server'] ?? {})['invite_code'] ?? '').toString();
+        _myTag = (d['myTag'] ?? '').toString();
+        _boosts = (boost['boosts'] as num?)?.toInt() ?? 0;
+        _boostLevel = (boost['level'] as num?)?.toInt() ?? 0;
+        _myBoost = boost['mine'] == true;
         _channels = ch;
         _channelId ??= ch.isNotEmpty ? (ch.first['id'] as num).toInt() : null;
         _busy = false;
@@ -527,9 +891,42 @@ class _ServerScreenState extends State<ServerScreen> {
         .fold<String>('', (a, b) => b);
     return Scaffold(
       appBar: AppBar(
-        title: Text('${widget.serverName} ${chName.isNotEmpty ? "#$chName" : ""}',
-            style: const TextStyle(fontSize: 16)),
+        title: Row(mainAxisSize: MainAxisSize.min, children: [
+          Flexible(
+            child: Text(
+                '${widget.serverName} ${chName.isNotEmpty ? "#$chName" : ""}',
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 16)),
+          ),
+          if (_boostLevel > 0) ...[
+            const SizedBox(width: 6),
+            Tooltip(
+              message: 'Server boost niveau $_boostLevel ($_boosts boosts, gratis)',
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                      colors: [Color(0xFF7B2FF7), Color(0xFF29B6F6)]),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text('⚡ $_boostLevel',
+                    style: const TextStyle(fontSize: 11, color: Colors.white)),
+              ),
+            ),
+          ],
+        ]),
         actions: [
+          IconButton(
+              icon: Icon(Icons.bolt,
+                  color: _myBoost ? Colors.amber : Colors.white54),
+              tooltip: _myBoost
+                  ? 'Boost dit (klik om te stoppen)'
+                  : 'Boost deze server — gratis',
+              onPressed: _boostToggle),
+          IconButton(
+              icon: const Icon(Icons.sell),
+              tooltip: 'Mijn server-tag ($_myTag)',
+              onPressed: _tagDialog),
           IconButton(
               icon: const Icon(Icons.group),
               tooltip: 'Leden en rollen',
@@ -570,9 +967,8 @@ class _ServerScreenState extends State<ServerScreen> {
                         itemBuilder: (ctx, i) {
                           final m =
                               _messages[i] as Map<String, dynamic>;
-                          final a = (m['author'] ?? {}) as Map<String, dynamic>;
-                          final roles =
-                              ((a['roles'] ?? []) as List).cast<dynamic>();
+                          final a = _authorOf(m);
+                          final roles = (a['roles'] as List).cast<dynamic>();
                           return Padding(
                             padding:
                                 const EdgeInsets.symmetric(vertical: 4),
@@ -593,14 +989,16 @@ class _ServerScreenState extends State<ServerScreen> {
                                             WrapCrossAlignment.center,
                                         children: [
                                           Text(
-                                              (a['display'] ??
-                                                      a['username'] ??
-                                                      '?')
+                                              (a['display'] ?? '?')
                                                   .toString(),
                                               style: const TextStyle(
                                                   fontWeight:
                                                       FontWeight.bold)),
-                                          ...roles.take(2).map((r) =>
+                                          if ((a['tag'] ?? '')
+                                              .toString()
+                                              .isNotEmpty)
+                                            _tagChip(a['tag'].toString()),
+                                          ...roles.map((r) =>
                                               Container(
                                                 padding: const EdgeInsets
                                                     .symmetric(
@@ -608,15 +1006,19 @@ class _ServerScreenState extends State<ServerScreen> {
                                                     vertical: 1),
                                                 decoration: BoxDecoration(
                                                   color: _colorOf(
-                                                      (r['color'] ??
-                                                              '#29B6F6')
+                                                      ((r is Map
+                                                              ? r['color']
+                                                              : null) ??
+                                                          '#29B6F6')
                                                           .toString()),
                                                   borderRadius:
                                                       BorderRadius.circular(
                                                           8),
                                                 ),
                                                 child: Text(
-                                                    (r['name'] ?? '')
+                                                    ((r is Map
+                                                            ? r['name']
+                                                            : r) ?? '')
                                                         .toString(),
                                                     style: const TextStyle(
                                                         fontSize: 10)),
@@ -702,6 +1104,106 @@ class _ServerScreenState extends State<ServerScreen> {
     }
   }
 
+  /// Berichten komen plat binnen (display/avatar/tag); rollen komen uit de
+  /// ledenlijst, dus hier samengevoegd tot één auteurs-object.
+  Map<String, dynamic> _authorOf(Map<String, dynamic> m) {
+    final uid = (m['user_id'] as num?)?.toInt();
+    dynamic mem;
+    for (final x in _members) {
+      if (x is Map && (x['id'] as num?)?.toInt() == uid) {
+        mem = x;
+        break;
+      }
+    }
+    final ids = ((mem is Map ? mem['roles'] : null) ?? const []) as List;
+    final roleObjs = _roles
+        .where((r) => r is Map && ids.contains(r['id']))
+        .take(3)
+        .toList();
+    return {
+      'display': m['display'] ?? m['username'] ?? '?',
+      'username': m['username'] ?? '',
+      'avatar': m['avatar'],
+      'tag': m['tag'] ?? '',
+      'roles': roleObjs,
+    };
+  }
+
+  Widget _tagChip(String tag) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+        decoration: BoxDecoration(
+          color: Colors.white10,
+          border: Border.all(color: Colors.white30),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(tag,
+            style:
+                const TextStyle(fontSize: 10, color: Colors.lightBlueAccent)),
+      );
+
+  Future<void> _tagDialog() async {
+    final c = TextEditingController(text: _myTag);
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Mijn server-tag'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+                'Kort label dat achter je naam verschijnt in deze server.',
+                style: TextStyle(fontSize: 12)),
+            TextField(
+              controller: c,
+              maxLength: 24,
+              decoration:
+                  const InputDecoration(labelText: 'Tag (bijv. Wolf, Builder)'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Annuleren')),
+          FilledButton(
+            onPressed: () async {
+              try {
+                await _api.setServerTag(widget.serverId, c.text.trim());
+                if (ctx.mounted) Navigator.pop(ctx);
+                _load();
+              } catch (e) {
+                _snack(e);
+              }
+            },
+            child: const Text('Opslaan'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _boostToggle() async {
+    try {
+      final r = await _api.boost(widget.serverId);
+      setState(() {
+        _boosts = (r['boosts'] as num?)?.toInt() ?? _boosts;
+        _boostLevel = (r['level'] as num?)?.toInt() ?? _boostLevel;
+        _myBoost = r['mine'] == true;
+      });
+      _snack(_myBoost
+          ? 'Server gebost! ⚡ niveau $_boostLevel — gratis, puur voor de looks.'
+          : 'Boost ingetrokken.');
+    } catch (e) {
+      _snack(e);
+    }
+  }
+
+  void _snack(Object e) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(e.toString().replaceFirst('Exception: ', ''))));
+  }
+
   Future<void> _channelsSheet() async {
     final manage = _rights['manage'] == true;
     final naam = TextEditingController();
@@ -780,16 +1282,27 @@ class _ServerScreenState extends State<ServerScreen> {
                   itemCount: _members.length,
                   itemBuilder: (c2, i) {
                     final m = _members[i] as Map<String, dynamic>;
-                    final roles =
+                    final ids =
                         ((m['roles'] ?? []) as List).cast<dynamic>();
+                    final roleObjs = _roles
+                        .where((r) => r is Map && ids.contains(r['id']))
+                        .toList();
+                    final naam =
+                        (m['display'] ?? m['username'] ?? '?').toString();
+                    final tag = (m['tag'] ?? '').toString();
                     return ListTile(
                       leading: _avatar(m),
-                      title: Text((m['display'] ?? m['username'] ?? '?')
-                          .toString()),
-                      subtitle: roles.isEmpty
+                      title: Wrap(
+                          spacing: 6,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Text(naam),
+                            if (tag.isNotEmpty) _tagChip(tag),
+                          ]),
+                      subtitle: roleObjs.isEmpty
                           ? null
-                          : Text(roles
-                              .map((r) => (r['name'] ?? '').toString())
+                          : Text(roleObjs
+                              .map((r) => ((r as Map)['name'] ?? '').toString())
                               .join(', ')),
                       trailing: kick
                           ? IconButton(
@@ -806,11 +1319,8 @@ class _ServerScreenState extends State<ServerScreen> {
                       onTap: manage
                           ? () => _rolesDialog(
                               (m['id'] as num).toInt(),
-                              (m['display'] ?? m['username'] ?? '?')
-                                  .toString(),
-                              roles
-                                  .map((r) => (r['id'] as num).toInt())
-                                  .toList())
+                              naam,
+                              ids.map((r) => (r as num).toInt()).toList())
                           : null,
                     );
                   },
@@ -1049,6 +1559,272 @@ class _DmScreenState extends State<DmScreen> {
                       onSubmitted: (_) => _send(),
                       decoration: const InputDecoration(
                           hintText: 'Bericht…',
+                          border: OutlineInputBorder()),
+                    ),
+                  ),
+                  IconButton(
+                      onPressed: _send, icon: const Icon(Icons.send)),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Groeps-DM met vrienden (zoals een Discord groeps-chat).
+class GroupScreen extends StatefulWidget {
+  final int groupId;
+  final String name;
+  const GroupScreen({super.key, required this.groupId, required this.name});
+
+  @override
+  State<GroupScreen> createState() => _GroupScreenState();
+}
+
+class _GroupScreenState extends State<GroupScreen> {
+  final _api = WolfSynService();
+  final _msg = TextEditingController();
+  List<dynamic> _messages = [];
+  List<dynamic> _members = [];
+  Map<String, dynamic> _group = {};
+  Timer? _poll;
+  Timer? _tick;
+  int? _me;
+
+  @override
+  void initState() {
+    super.initState();
+    _api.profile().then((p) {
+      if (mounted) setState(() => _me = (p['id'] as num?)?.toInt());
+    });
+    _load();
+    _poll = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (mounted) _load(silent: true);
+    });
+    _tick = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      final live =
+          _messages.any((m) => m is Map && m['expires_at'] != null);
+      if (live) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _poll?.cancel();
+    _tick?.cancel();
+    _msg.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load({bool silent = false}) async {
+    try {
+      final d = await _api.groupDetail(widget.groupId);
+      if (!mounted) return;
+      setState(() {
+        _group = ((d['group'] ?? {}) as Map).cast<String, dynamic>();
+        _members = (d['members'] ?? []) as List<dynamic>;
+        _messages = (d['messages'] ?? []) as List<dynamic>;
+      });
+    } catch (e) {
+      if (!silent) _snack(e);
+    }
+  }
+
+  Future<void> _send() async {
+    final t = _msg.text.trim();
+    if (t.isEmpty) return;
+    _msg.clear();
+    try {
+      await _api.sendGroup(widget.groupId, t);
+      _load();
+    } catch (e) {
+      _snack(e);
+    }
+  }
+
+  void _snack(Object e) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(e.toString().replaceFirst('Exception: ', ''))));
+  }
+
+  String _expiry(dynamic raw) {
+    final dt = DateTime.tryParse(raw?.toString() ?? '')?.toLocal();
+    if (dt == null) return '⏳ verdwijnt zo…';
+    final left = dt.difference(DateTime.now()).inSeconds;
+    return left <= 0
+        ? '⏳ verdwijnt zo…'
+        : '⏳ verdwijnt over ${left}s (als iedereen het gelezen heeft)';
+  }
+
+  Widget _avatarOf(Map<String, dynamic> m, double r) {
+    final url = m['avatar']?.toString();
+    final name = (m['display'] ?? m['username'] ?? '?').toString();
+    if (url != null && url.isNotEmpty) {
+      return CircleAvatar(
+          radius: r,
+          backgroundImage: NetworkImage(url),
+          onBackgroundImageError: (_, __) {},
+          child: Text(name.isNotEmpty ? name.characters.first.toUpperCase() : '?'));
+    }
+    return CircleAvatar(
+        radius: r,
+        child: Text(name.isNotEmpty ? name.characters.first.toUpperCase() : '?'));
+  }
+
+  Future<void> _membersSheet() async {
+    await showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Leden (${_members.length})',
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              ..._members.map((m) {
+                final mm = m as Map<String, dynamic>;
+                return ListTile(
+                  leading: _avatarOf(mm, 18),
+                  title: Text((mm['display'] ?? mm['username'] ?? '?')
+                      .toString()),
+                  subtitle: Text(
+                      (mm['id'] as num?)?.toInt() ==
+                              (_group['owner_id'] as num?)?.toInt()
+                          ? 'maker van de groep'
+                          : '@${mm['username'] ?? ''}',
+                      style: const TextStyle(fontSize: 11)),
+                );
+              }),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _leave() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Groep verlaten?'),
+        content: const Text('De berichten die nog in de groep staan blijven '
+            'voor de anderen, jij stapt eruit.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Blijven')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Verlaten')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await _api.leaveGroup(widget.groupId);
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      _snack(e);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Row(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(Icons.groups, size: 20),
+          const SizedBox(width: 6),
+          Flexible(
+              child: Text(widget.name,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 16))),
+        ]),
+        actions: [
+          IconButton(
+              icon: const Icon(Icons.group),
+              tooltip: 'Leden',
+              onPressed: _membersSheet),
+          IconButton(
+              icon: const Icon(Icons.logout),
+              tooltip: 'Groep verlaten',
+              onPressed: _leave),
+        ],
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.all(12),
+              itemCount: _messages.length,
+              itemBuilder: (ctx, i) {
+                final m = _messages[i] as Map<String, dynamic>;
+                final uid = (m['user_id'] as num?)?.toInt();
+                final me = _me != null && uid == _me;
+                Map<String, dynamic> who = {'username': '?'};
+                for (final x in _members) {
+                  if (x is Map && (x['id'] as num?)?.toInt() == uid) {
+                    who = x.cast<String, dynamic>();
+                    break;
+                  }
+                }
+                return Align(
+                  alignment:
+                      me ? Alignment.centerRight : Alignment.centerLeft,
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(vertical: 3),
+                    padding: const EdgeInsets.all(10),
+                    constraints: BoxConstraints(
+                        maxWidth: MediaQuery.of(ctx).size.width * 0.75),
+                    decoration: BoxDecoration(
+                      color: me ? Colors.green.shade700 : Colors.white10,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: me
+                          ? CrossAxisAlignment.end
+                          : CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (!me)
+                          Text(
+                              (who['display'] ?? who['username'] ?? '?')
+                                  .toString(),
+                              style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.lightBlueAccent)),
+                        Text((m['body'] ?? '').toString()),
+                        if (m['expires_at'] != null)
+                          Text(
+                            _expiry(m['expires_at']),
+                            style: const TextStyle(
+                                fontSize: 10, color: Colors.amberAccent),
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _msg,
+                      onSubmitted: (_) => _send(),
+                      decoration: const InputDecoration(
+                          hintText: 'Bericht naar de groep…  (/delete om te wissen)',
                           border: OutlineInputBorder()),
                     ),
                   ),

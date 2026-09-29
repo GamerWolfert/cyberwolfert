@@ -163,8 +163,14 @@ async function sweepEphemeral() {
     for (const row of m.rows) await purgeMessage(row, 'channel', row.channel_id, 'expire', null);
     const d = await db.query(`SELECT * FROM ws_dms WHERE expires_at IS NOT NULL AND expires_at <= NOW() ORDER BY id`);
     for (const row of d.rows) await purgeDm(row, 'expire', null);
-    if (m.rows.length || d.rows.length) {
-      log.wolfsyn(`**${m.rows.length + d.rows.length} bericht(en)** automatisch verdwenen na lezing +${EPHEMERAL_SECONDS}s`);
+    const g = await db.query(
+      `SELECT * FROM ws_group_messages WHERE expires_at IS NOT NULL AND expires_at <= NOW() ORDER BY id`
+    );
+    for (const row of g.rows) await purgeGroupMessage(row, 'expire', null);
+    if (m.rows.length || d.rows.length || g.rows.length) {
+      log.wolfsyn(
+        `**${m.rows.length + d.rows.length + g.rows.length} bericht(en)** automatisch verdwenen na lezing +${EPHEMERAL_SECONDS}s`
+      );
     }
   } catch (_) {}
 }
@@ -198,6 +204,14 @@ router.post('/servers', async (req, res) => {
   res.json(server);
 });
 
+// Server-tag: kort label achter je naam, alleen in die server (zoals Discord).
+function cleanTag(v) {
+  return String(v || '')
+    .replace(/[^\p{L}\p{N}_\- ]/gu, '')
+    .trim()
+    .slice(0, 24);
+}
+
 router.post('/join', async (req, res) => {
   const c = String(req.body?.code || '').trim().toUpperCase();
   const s = await db.query('SELECT * FROM ws_servers WHERE invite_code=$1', [c]);
@@ -206,7 +220,44 @@ router.post('/join', async (req, res) => {
     'INSERT INTO ws_members (server_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
     [s.rows[0].id, req.userId]
   );
+  const tag = cleanTag(req.body?.tag);
+  if (tag) {
+    await db.query('UPDATE ws_members SET server_tag=$3 WHERE server_id=$1 AND user_id=$2', [s.rows[0].id, req.userId, tag]);
+  }
   res.json(s.rows[0]);
+});
+
+// Eigen server-tag (later wijzigen).
+router.put('/servers/:id/tag', async (req, res) => {
+  const sid = Number(req.params.id);
+  if (!(await isMember(req.userId, sid))) return res.status(403).json({ error: 'geen lid' });
+  const tag = cleanTag(req.body?.tag);
+  await db.query('UPDATE ws_members SET server_tag=$3 WHERE server_id=$1 AND user_id=$2', [sid, req.userId, tag || null]);
+  res.json({ ok: true, tag: tag || null });
+});
+
+// --- Boosts (gratis, alleen visuals) ---
+function boostLevel(n) {
+  return n >= 7 ? 2 : n >= 2 ? 1 : 0;
+}
+
+router.post('/servers/:id/boost', async (req, res) => {
+  const sid = Number(req.params.id);
+  if (!(await isMember(req.userId, sid))) return res.status(403).json({ error: 'geen lid' });
+  const has = await db.query('SELECT 1 FROM ws_boosts WHERE server_id=$1 AND user_id=$2', [sid, req.userId]);
+  if (has.rows.length) {
+    await db.query('DELETE FROM ws_boosts WHERE server_id=$1 AND user_id=$2', [sid, req.userId]);
+  } else {
+    await db.query('INSERT INTO ws_boosts (server_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [sid, req.userId]);
+  }
+  const c = await db.query('SELECT COUNT(*)::int AS n FROM ws_boosts WHERE server_id=$1', [sid]);
+  const boosts = c.rows[0].n;
+  const level = boostLevel(boosts);
+  await db.query('UPDATE ws_servers SET banner_color=$2 WHERE id=$1', [
+    sid,
+    ['#E63946', '#29B6F6', '#F4B400'][level],
+  ]);
+  res.json({ ok: true, boosts, level, mine: !has.rows.length });
 });
 
 router.get('/servers/:id', async (req, res) => {
@@ -215,12 +266,12 @@ router.get('/servers/:id', async (req, res) => {
   const roles = await db.query('SELECT * FROM ws_roles WHERE server_id=$1 ORDER BY position', [req.params.id]);
   const members = await db.query(
     `SELECT u.id, u.username, COALESCE(p.display_name, u.display_name, u.username) AS display,
-            COALESCE(p.avatar_url, u.avatar_url) AS avatar,
+            COALESCE(p.avatar_url, u.avatar_url) AS avatar, m.server_tag AS tag,
             COALESCE(array_agg(mr.role_id) FILTER (WHERE mr.role_id IS NOT NULL), '{}') AS roles
      FROM ws_members m JOIN users u ON u.id=m.user_id
      LEFT JOIN ws_profiles p ON p.user_id=u.id
      LEFT JOIN ws_member_roles mr ON mr.server_id=m.server_id AND mr.user_id=m.user_id
-     WHERE m.server_id=$1 GROUP BY u.id, p.display_name, p.avatar_url, u.display_name, u.username`,
+     WHERE m.server_id=$1 GROUP BY u.id, p.display_name, p.avatar_url, u.display_name, u.username, m.server_tag`,
     [req.params.id]
   );
   const mine = await db.query(
@@ -230,11 +281,22 @@ router.get('/servers/:id', async (req, res) => {
     [req.params.id, req.userId]
   );
   const owner = await isOwner(req.userId, req.params.id);
+  const bc = await db.query('SELECT COUNT(*)::int AS n, BOOL_OR(user_id=$2) AS mine FROM ws_boosts WHERE server_id=$1', [
+    req.params.id,
+    req.userId,
+  ]);
+  const boosts = bc.rows[0]?.n || 0;
+  const me = await db.query('SELECT server_tag FROM ws_members WHERE server_id=$1 AND user_id=$2', [
+    req.params.id,
+    req.userId,
+  ]);
   res.json({
     server: s.rows[0],
     roles: roles.rows,
     members: members.rows,
     myRights: { manage: owner || !!mine.rows[0]?.manage, kick: owner || !!mine.rows[0]?.kick, owner },
+    myTag: me.rows[0]?.server_tag || null,
+    boost: { boosts, level: boostLevel(boosts), mine: !!bc.rows[0]?.mine },
   });
 });
 
@@ -308,11 +370,14 @@ router.get('/channels/:id/messages', async (req, res) => {
   const before = Number(req.query.before || 0);
   const r = await db.query(
     `SELECT m.*, COALESCE(p.display_name, u.display_name, u.username) AS display,
-            COALESCE(p.avatar_url, u.avatar_url) AS avatar, u.username
+            COALESCE(p.avatar_url, u.avatar_url) AS avatar, u.username,
+            mm.server_tag AS tag
      FROM ws_messages m JOIN users u ON u.id=m.user_id
      LEFT JOIN ws_profiles p ON p.user_id=u.id
-     WHERE m.channel_id=$1 ${before ? 'AND m.id < $3' : ''} ORDER BY m.id DESC LIMIT $2`,
-    before ? [req.params.id, limit, before] : [req.params.id, limit]
+     LEFT JOIN ws_members mm ON mm.user_id=m.user_id AND mm.server_id=$4
+     WHERE m.channel_id=$1 AND ($3::int IS NULL OR m.id < $3)
+     ORDER BY m.id DESC LIMIT $2`,
+    [req.params.id, limit, before ? Number(before) : null, sid]
   );
   const rows = r.rows.reverse();
   // Lezen = markeren; als iedereen gelezen heeft, start de teller van 20 seconden.
@@ -421,6 +486,262 @@ router.get('/inbox', async (req, res) => {
     out.push({ user: u.rows[0], last: row.body, at: row.created_at });
   }
   res.json(out);
+});
+
+// --- Vrienden (zoals Discord) ---
+async function addFriend(a, b) {
+  await db.query(
+    `INSERT INTO ws_friends (user_id, friend_id) VALUES ($1,$2),($2,$1) ON CONFLICT DO NOTHING`,
+    [a, b]
+  );
+  await db.query(`DELETE FROM ws_friend_requests WHERE (from_id=$1 AND to_id=$2) OR (from_id=$2 AND to_id=$1)`, [a, b]);
+}
+
+const friendCols = `u.id, u.username, COALESCE(p.display_name, u.display_name, u.username) AS display,
+        COALESCE(p.avatar_url, u.avatar_url) AS avatar`;
+// Let m.id altijd de bericht-id zijn (friendCols bevat ook u.id).
+const groupMsgCols = `m.id, m.group_id, m.user_id, m.body, m.expires_at, m.created_at, u.username,
+        COALESCE(p.display_name, u.display_name, u.username) AS display,
+        COALESCE(p.avatar_url, u.avatar_url) AS avatar`;
+
+router.get('/friends', async (req, res) => {
+  const friends = await db.query(
+    `SELECT ${friendCols}, f.since FROM ws_friends f JOIN users u ON u.id=f.friend_id
+     LEFT JOIN ws_profiles p ON p.user_id=u.id WHERE f.user_id=$1
+     ORDER BY LOWER(COALESCE(p.display_name, u.display_name, u.username))`,
+    [req.userId]
+  );
+  const incoming = await db.query(
+    `SELECT r.id AS request_id, r.created_at, ${friendCols} FROM ws_friend_requests r
+     JOIN users u ON u.id=r.from_id LEFT JOIN ws_profiles p ON p.user_id=u.id
+     WHERE r.to_id=$1 AND r.status='pending' ORDER BY r.created_at DESC`,
+    [req.userId]
+  );
+  const outgoing = await db.query(
+    `SELECT r.id AS request_id, r.created_at, ${friendCols} FROM ws_friend_requests r
+     JOIN users u ON u.id=r.to_id LEFT JOIN ws_profiles p ON p.user_id=u.id
+     WHERE r.from_id=$1 AND r.status='pending' ORDER BY r.created_at DESC`,
+    [req.userId]
+  );
+  res.json({ friends: friends.rows, incoming: incoming.rows, outgoing: outgoing.rows });
+});
+
+router.post('/friends/request', async (req, res) => {
+  const uname = String(req.body?.username || '').trim();
+  if (!uname) return res.status(400).json({ error: 'naam ontbreekt' });
+  const u = await db.query('SELECT id FROM users WHERE LOWER(username)=LOWER($1)', [uname]);
+  if (!u.rows.length) return res.status(404).json({ error: 'gebruiker niet gevonden' });
+  const other = Number(u.rows[0].id);
+  if (other === req.userId) return res.status(400).json({ error: 'je kan jezelf geen verzoek sturen' });
+  const are = await db.query('SELECT 1 FROM ws_friends WHERE user_id=$1 AND friend_id=$2', [req.userId, other]);
+  if (are.rows.length) return res.status(409).json({ error: 'jullie zijn al vrienden' });
+  const rev = await db.query(
+    `SELECT 1 FROM ws_friend_requests WHERE from_id=$1 AND to_id=$2 AND status='pending'`,
+    [other, req.userId]
+  );
+  if (rev.rows.length) {
+    await addFriend(req.userId, other);
+    return res.json({ ok: true, accepted: true });
+  }
+  await db.query(
+    `INSERT INTO ws_friend_requests (from_id, to_id) VALUES ($1,$2)
+     ON CONFLICT (from_id, to_id) DO UPDATE SET status='pending', created_at=NOW()`,
+    [req.userId, other]
+  );
+  res.json({ ok: true, sent: true });
+});
+
+router.post('/friends/respond', async (req, res) => {
+  const from = Number(req.body?.from ?? req.body?.from_id);
+  const accept = req.body?.accept !== false;
+  const r = await db.query(
+    `SELECT * FROM ws_friend_requests WHERE from_id=$1 AND to_id=$2 AND status='pending'`,
+    [from, req.userId]
+  );
+  if (!r.rows.length) return res.status(404).json({ error: 'geen verzoek gevonden' });
+  if (accept) {
+    await db.query(`UPDATE ws_friend_requests SET status='accepted' WHERE id=$1`, [r.rows[0].id]);
+    await addFriend(req.userId, from);
+  } else {
+    await db.query('DELETE FROM ws_friend_requests WHERE id=$1', [r.rows[0].id]);
+  }
+  res.json({ ok: true, accepted: accept });
+});
+
+router.delete('/friends/:uid', async (req, res) => {
+  const other = Number(req.params.uid);
+  await db.query('DELETE FROM ws_friends WHERE (user_id=$1 AND friend_id=$2) OR (user_id=$2 AND friend_id=$1)', [
+    req.userId,
+    other,
+  ]);
+  await db.query(
+    `DELETE FROM ws_friend_requests WHERE (from_id=$1 AND to_id=$2) OR (from_id=$2 AND to_id=$1)`,
+    [req.userId, other]
+  );
+  res.json({ ok: true });
+});
+
+// --- Groeps-DM's (groepen met vrienden) ---
+async function groupMemberIds(gid) {
+  const r = await db.query('SELECT user_id FROM ws_group_members WHERE group_id=$1', [gid]);
+  return r.rows.map((x) => Number(x.user_id));
+}
+
+async function isGroupMember(uid, gid) {
+  const r = await db.query('SELECT 1 FROM ws_group_members WHERE group_id=$1 AND user_id=$2', [gid, uid]);
+  return r.rows.length > 0;
+}
+
+// Zet expires_at als ALLES het groepsbericht gelezen heeft.
+async function markGroupRead(gid, uid, ids) {
+  const list = (ids || []).map(Number).filter((n) => n > 0);
+  if (!list.length) return [];
+  try {
+    await db.query(
+      `INSERT INTO ws_group_reads (message_id, user_id)
+       SELECT unnest($1::int[]), $2 ON CONFLICT DO NOTHING`,
+      [list, uid]
+    );
+    const members = await groupMemberIds(gid);
+    if (!members.length) return [];
+    const r = await db.query(
+      `SELECT m.id FROM ws_group_messages m
+        WHERE m.group_id=$1 AND m.expires_at IS NULL AND m.id = ANY($2::int[])
+          AND NOT EXISTS (
+            SELECT 1 FROM unnest($3::int[]) x(id)
+             WHERE NOT EXISTS (
+               SELECT 1 FROM ws_group_reads rr WHERE rr.message_id = m.id AND rr.user_id = x.id
+             )
+          )`,
+      [gid, list, members]
+    );
+    if (r.rows.length) {
+      const upd = await db.query(
+        `UPDATE ws_group_messages SET expires_at = NOW() + ($2 || ' seconds')::interval
+          WHERE id = ANY($1::int[]) RETURNING id, expires_at`,
+        [r.rows.map((x) => x.id), String(EPHEMERAL_SECONDS)]
+      );
+      return upd.rows;
+    }
+  } catch (_) {}
+  return [];
+}
+
+async function purgeGroupMessage(row, reason, byUid) {
+  try {
+    const u = await db.query('SELECT username FROM users WHERE id=$1', [row.user_id]);
+    await db.query(
+      `INSERT INTO ws_message_log (kind, ref_id, message_id, user_id, username, body, reason)
+       VALUES ('group',$1,$2,$3,$4,$5,$6)`,
+      [row.group_id, row.id, row.user_id, u.rows[0]?.username || null, row.body, reason]
+    );
+    await db.query('DELETE FROM ws_group_messages WHERE id=$1', [row.id]);
+    if (reason !== 'expire') {
+      const wie = byUid ? `door \`user#${byUid}\`` : 'automatisch';
+      log.wolfsyn(
+        `**WolfSyn groepsbericht verwijderd** (${wie}) groep #${row.group_id}: ` +
+          String(row.body || '').replace(/\n/g, ' ').slice(0, 300)
+      );
+    }
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+router.post('/groups', async (req, res) => {
+  const name = esc(req.body?.name || 'Nieuwe groep').slice(0, 64) || 'Nieuwe groep';
+  const ids = (Array.isArray(req.body?.memberIds) ? req.body.memberIds : [])
+    .map(Number)
+    .filter((n) => n > 0 && n !== req.userId);
+  if (!ids.length) return res.status(400).json({ error: 'kies minstens één vriend' });
+  // Alleen echte vrienden mogen in een groep.
+  const ok = await db.query('SELECT friend_id FROM ws_friends WHERE user_id=$1 AND friend_id = ANY($2::int[])', [
+    req.userId,
+    ids,
+  ]);
+  const allowed = new Set(ok.rows.map((x) => Number(x.friend_id)));
+  const members = [...new Set([...ids].filter((x) => allowed.has(x)))].slice(0, 9);
+  if (!members.length) return res.status(400).json({ error: 'alleen met vrienden (stuur eerst een vriendverzoek)' });
+  const g = await db.query('INSERT INTO ws_groups (name, owner_id) VALUES ($1,$2) RETURNING *', [name, req.userId]);
+  const gid = g.rows[0].id;
+  await db.query('INSERT INTO ws_group_members (group_id, user_id) VALUES ($1,$2)', [gid, req.userId]);
+  for (const m of members) {
+    await db.query('INSERT INTO ws_group_members (group_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [gid, m]);
+  }
+  res.json(g.rows[0]);
+});
+
+router.get('/groups', async (req, res) => {
+  const r = await db.query(
+    `SELECT g.*, (SELECT COUNT(*) FROM ws_group_members x WHERE x.group_id=g.id)::int AS members,
+            (SELECT b.body FROM ws_group_messages b WHERE b.group_id=g.id ORDER BY b.id DESC LIMIT 1) AS last_body,
+            (SELECT b.created_at FROM ws_group_messages b WHERE b.group_id=g.id ORDER BY b.id DESC LIMIT 1) AS last_at,
+            COALESCE((SELECT array_agg(u.username) FROM ws_group_members x JOIN users u ON u.id=x.user_id
+                       WHERE x.group_id=g.id AND x.user_id != $1), '{}') AS member_names
+     FROM ws_groups g JOIN ws_group_members mine ON mine.group_id=g.id AND mine.user_id=$1
+     ORDER BY g.id DESC`,
+    [req.userId]
+  );
+  res.json(r.rows);
+});
+
+router.get('/groups/:id', async (req, res) => {
+  const gid = Number(req.params.id);
+  if (!(await isGroupMember(req.userId, gid))) return res.status(403).json({ error: 'geen lid' });
+  const g = await db.query('SELECT * FROM ws_groups WHERE id=$1', [gid]);
+  if (!g.rows.length) return res.status(404).json({ error: 'groep niet gevonden' });
+  const members = await db.query(
+    `SELECT ${friendCols} FROM ws_group_members gm JOIN users u ON u.id=gm.user_id
+     LEFT JOIN ws_profiles p ON p.user_id=u.id WHERE gm.group_id=$1 ORDER BY LOWER(COALESCE(p.display_name,u.display_name,u.username))`,
+    [gid]
+  );
+  const limit = Math.min(Number(req.query.limit || 50), 100);
+  const r = await db.query(
+    `SELECT ${groupMsgCols} FROM ws_group_messages m JOIN users u ON u.id=m.user_id
+     LEFT JOIN ws_profiles p ON p.user_id=u.id WHERE m.group_id=$1 ORDER BY m.id DESC LIMIT $2`,
+    [gid, limit]
+  );
+  const rows = r.rows.reverse();
+  const tick = await markGroupRead(gid, req.userId, rows.map((x) => x.id));
+  if (tick.length) {
+    const mp = new Map(tick.map((x) => [x.id, x.expires_at]));
+    for (const row of rows) if (mp.has(row.id)) row.expires_at = mp.get(row.id);
+  }
+  res.json({ group: g.rows[0], members: members.rows, messages: rows });
+});
+
+router.post('/groups/:id/messages', async (req, res) => {
+  const gid = Number(req.params.id);
+  if (!(await isGroupMember(req.userId, gid))) return res.status(403).json({ error: 'geen lid' });
+  const body = esc(req.body?.body);
+  if (!body) return res.status(400).json({ error: 'leeg bericht' });
+  if (/^\/delete\b/i.test(body)) {
+    const g = await db.query('SELECT owner_id FROM ws_groups WHERE id=$1', [gid]);
+    const allowed = g.rows[0]?.owner_id === req.userId || (await isAdminUser(req.userId));
+    if (!allowed) return res.status(403).json({ error: 'alleen de maker van de groep mag /delete gebruiken' });
+    const arg = body.replace(/^\/delete\s*/i, '').trim();
+    const target = /^\d+$/.test(arg)
+      ? await db.query('SELECT * FROM ws_group_messages WHERE id=$1 AND group_id=$2', [Number(arg), gid])
+      : await db.query('SELECT * FROM ws_group_messages WHERE group_id=$1 ORDER BY id DESC LIMIT 1', [gid]);
+    if (!target.rows.length) return res.status(404).json({ error: 'niets om te verwijderen' });
+    await purgeGroupMessage(target.rows[0], 'owner_delete', req.userId);
+    return res.json({ ok: true, deleted: target.rows[0].id });
+  }
+  const r = await db.query('INSERT INTO ws_group_messages (group_id, user_id, body) VALUES ($1,$2,$3) RETURNING *', [
+    gid,
+    req.userId,
+    body,
+  ]);
+  res.json(r.rows[0]);
+});
+
+router.post('/groups/:id/leave', async (req, res) => {
+  const gid = Number(req.params.id);
+  await db.query('DELETE FROM ws_group_members WHERE group_id=$1 AND user_id=$2', [gid, req.userId]);
+  const rest = await db.query('SELECT COUNT(*)::int AS n FROM ws_group_members WHERE group_id=$1', [gid]);
+  if (!rest.rows[0]?.n) await db.query('DELETE FROM ws_groups WHERE id=$1', [gid]);
+  res.json({ ok: true });
 });
 
 // --- Eigen WolfSyn-profiel (los van browser-loginnaam) ---

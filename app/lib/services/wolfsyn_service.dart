@@ -10,8 +10,15 @@ class WolfSynService {
   Future<Map<String, dynamic>> createServer(String name) async =>
       (await _api.apiPost('/wolf/servers', {'name': name})) as Map<String, dynamic>;
 
-  Future<Map<String, dynamic>> join(String code) async =>
-      (await _api.apiPost('/wolf/join', {'code': code})) as Map<String, dynamic>;
+  Future<Map<String, dynamic>> join(String code, {String? tag}) async =>
+      (await _api.apiPost('/wolf/join', {'code': code, if (tag != null && tag.isNotEmpty) 'tag': tag}))
+          as Map<String, dynamic>;
+
+  Future<Map<String, dynamic>> setServerTag(int serverId, String tag) async =>
+      (await _api.apiPut('/wolf/servers/$serverId/tag', {'tag': tag})) as Map<String, dynamic>;
+
+  Future<Map<String, dynamic>> boost(int serverId) async =>
+      (await _api.apiPost('/wolf/servers/$serverId/boost', {})) as Map<String, dynamic>;
 
   Future<Map<String, dynamic>> serverDetail(int id) async =>
       (await _api.apiGet('/wolf/servers/$id')) as Map<String, dynamic>;
@@ -69,6 +76,41 @@ class WolfSynService {
 
   Future<Map<String, dynamic>> profile() async =>
       (await _api.apiGet('/wolf/profile')) as Map<String, dynamic>;
+
+  // --- Vrienden ---
+  Future<Map<String, dynamic>> friends() async =>
+      (await _api.apiGet('/wolf/friends')) as Map<String, dynamic>;
+
+  Future<Map<String, dynamic>> requestFriend(String username) async =>
+      (await _api.apiPost('/wolf/friends/request', {'username': username}))
+          as Map<String, dynamic>;
+
+  Future<Map<String, dynamic>> respondFriend(int fromId, {bool accept = true}) async =>
+      (await _api.apiPost('/wolf/friends/respond', {'from': fromId, 'accept': accept}))
+          as Map<String, dynamic>;
+
+  Future<void> removeFriend(int userId) async {
+    await _api.apiDelete('/wolf/friends/$userId');
+  }
+
+  // --- Groepen (groeps-DM's) ---
+  Future<List<dynamic>> groups() async =>
+      (await _api.apiGet('/wolf/groups')) as List<dynamic>;
+
+  Future<Map<String, dynamic>> createGroup(String name, List<int> memberIds) async =>
+      (await _api.apiPost('/wolf/groups', {'name': name, 'memberIds': memberIds}))
+          as Map<String, dynamic>;
+
+  Future<Map<String, dynamic>> groupDetail(int id) async =>
+      (await _api.apiGet('/wolf/groups/$id')) as Map<String, dynamic>;
+
+  Future<Map<String, dynamic>> sendGroup(int id, String body) async =>
+      (await _api.apiPost('/wolf/groups/$id/messages', {'body': body}))
+          as Map<String, dynamic>;
+
+  Future<void> leaveGroup(int id) async {
+    await _api.apiPost('/wolf/groups/$id/leave', {});
+  }
 
   Future<Map<String, dynamic>> saveProfile({String? displayName, String? bio}) async =>
       (await _api.apiPut('/wolf/profile',

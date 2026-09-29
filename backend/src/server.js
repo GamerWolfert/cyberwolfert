@@ -112,6 +112,15 @@ app.use((err, req, res, next) => {
   res.status(400).json({ error: 'bad_request', detail: err.message });
 });
 
+// Express 4 vangt asynchrone fouten in routes niet -> nooit de hele
+// backend laten crashen op één mislukte query.
+process.on('unhandledRejection', (err) => {
+  console.error('[net] niet-afgehandelde belofte:', (err && (err.stack || err.message)) || err);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[net] onverwachte fout:', (err && (err.stack || err.message)) || err);
+});
+
 const PORT = Number(process.env.PORT || 43711);
 const HOST = process.env.HOST || '0.0.0.0';
 
