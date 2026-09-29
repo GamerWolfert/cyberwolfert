@@ -1,9 +1,9 @@
 {
     "app": "CyberWolfert Browser",
-    "version": "2.5.2",
-    "build": 26,
+    "version": "2.5.3",
+    "build": 27,
     "minVersion": "1.0.0",
-    "notes": "Account maken en inloggen werkt nu overal: de app kiest zelf tussen thuisnetwerk en de internetverbinding, en slaat de ngrok-waarschuwing over.",
+    "notes": "APK wordt nu met een echte release-tekening gebouwd (Play Protect blokkeert hem minder snel) en de app legt uit hoe je een blokkade alsnog toestaat.",
     "updatedAt": "2026-09-29",
     "iosUrl": ""
 }

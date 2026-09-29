@@ -90,6 +90,7 @@ class AutoUpdate {
       if (entry.path != null) {
         await OpenFile.open(entry.path!,
             type: 'application/vnd.android.package-archive');
+        await _installHelp(context);
       }
     } catch (_) {
       if (context.mounted) {
@@ -102,5 +103,30 @@ class AutoUpdate {
     } finally {
       progress.dispose();
     }
+  }
+
+  /// Play Protect blokkeert sideloaded APK's ("App geblokkeerd om je apparaat
+  /// te beschermen"). Uitleg geven zodat updaten wél lukt.
+  static Future<void> _installHelp(BuildContext context) async {
+    if (!context.mounted) return;
+    await showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('📲 Installatie afronden'),
+        content: const Text(
+            'Android kan deze update blokkeren met Play Protect.\n\n'
+            '1. Tik op Details.\n'
+            '2. Tik op "Toch installeren".\n\n'
+            'Wordt het toch geblokkeerd? Zet Play Protect even uit (Play Store → je profiel → '
+            'Play Protect → scans uitschakelen), installeer de update en zet het daarna weer aan.\n\n'
+            'Staat er "App niet geïnstalleerd"? Verwijder eerst de oude CyberWolfert-app, '
+            'installeer de APK opnieuw en log daarna gewoon weer in.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Begrepen')),
+        ],
+      ),
+    );
   }
 }
