@@ -7,7 +7,7 @@ import 'api_service.dart';
 
 /// Update-check: vergelijkt build-nummer met backend/version.json.
 class UpdateService {
-  static const int currentBuild = 24;
+  static const int currentBuild = 25;
 
   static Future<Map<String, dynamic>?> _fetch(String path) async {
     try {

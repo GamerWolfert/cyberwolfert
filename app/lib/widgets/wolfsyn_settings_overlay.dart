@@ -465,10 +465,12 @@ class _WolfSettingsState extends State<_WolfSettings> {
   }
 
   // -------------------------------------------------------------- pagina's
-  Widget _simplePage(String title, String sub, List<Widget> kids) => Column(
+  Widget _simplePage(String title, String sub, List<Widget> kids,
+          {String head = 'Algemeen'}) =>
+      Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _H(title),
+          _H(head),
           const SizedBox(height: 4),
           Text(sub, style: const TextStyle(color: _cMuted, fontSize: 13.5)),
           const SizedBox(height: 18),
@@ -480,38 +482,43 @@ class _WolfSettingsState extends State<_WolfSettings> {
 
   Widget _toggle(String pref, String title, String desc, bool def) {
     final on = _toggles[pref] ?? def;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 18),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title,
-                    style: const TextStyle(
-                        color: _cText, fontSize: 14.5, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 3),
-                Text(desc, style: const TextStyle(color: _cMuted, fontSize: 12.5)),
-              ],
-            ),
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title,
+                        style: const TextStyle(
+                            color: _cText, fontSize: 14.5, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 3),
+                    Text(desc, style: const TextStyle(color: _cMuted, fontSize: 12.5)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              Switch(
+                value: on,
+                activeThumbColor: Colors.white,
+                activeTrackColor: _cBlue,
+                onChanged: (v) async {
+                  setState(() => _toggles[pref] = v);
+                  try {
+                    final p = await SharedPreferences.getInstance();
+                    await p.setBool('ws_$pref', v);
+                  } catch (_) {}
+                },
+              ),
+            ],
           ),
-          const SizedBox(width: 16),
-          Switch(
-            value: on,
-            activeThumbColor: Colors.white,
-            activeTrackColor: _cBlue,
-            onChanged: (v) async {
-              setState(() => _toggles[pref] = v);
-              try {
-                final p = await SharedPreferences.getInstance();
-                await p.setBool('ws_$pref', v);
-              } catch (_) {}
-            },
-          ),
-        ],
-      ),
+        ),
+        const Divider(color: _cHover, height: 1),
+      ],
     );
   }
 

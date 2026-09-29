@@ -294,7 +294,6 @@ class _WolfGifPickerState extends State<_WolfGifPicker> {
         label: 'Favorieten',
         url: _favs.isNotEmpty ? _favs.first : null,
         color: const Color(0xFF4B57D6),
-        icon: Icons.favorite,
         onTap: () => setState(() {
           _query = '';
           _title = 'Favorieten';
@@ -307,8 +306,7 @@ class _WolfGifPickerState extends State<_WolfGifPicker> {
         icon: Icons.trending_up,
         onTap: () => _open("Trending GIF's", 'trending'),
       ),
-      for (final c in _kCategories)
-        _tile(label: c, url: _previews[c], icon: Icons.gif_box, onTap: () => _open(c, c)),
+      for (final c in _kCategories) _tile(label: c, url: _previews[c], onTap: () => _open(c, c)),
     ];
 
     return GridView.count(
@@ -317,7 +315,7 @@ class _WolfGifPickerState extends State<_WolfGifPicker> {
       padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
       mainAxisSpacing: 10,
       crossAxisSpacing: 10,
-      childAspectRatio: 1.7,
+      childAspectRatio: 1.9,
       children: tiles,
     );
   }
@@ -326,7 +324,7 @@ class _WolfGifPickerState extends State<_WolfGifPicker> {
       {required String label,
       String? url,
       Color? color,
-      IconData icon = Icons.gif_box,
+      IconData? icon,
       required VoidCallback onTap}) {
     return InkWell(
       borderRadius: BorderRadius.circular(10),
@@ -358,11 +356,11 @@ class _WolfGifPickerState extends State<_WolfGifPicker> {
             Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
                   colors: [
-                    Colors.black.withValues(alpha: 0.72),
-                    Colors.black.withValues(alpha: 0.18),
+                    Colors.black.withValues(alpha: 0.34),
+                    Colors.black.withValues(alpha: 0.52),
                   ],
                 ),
               ),
@@ -372,13 +370,18 @@ class _WolfGifPickerState extends State<_WolfGifPicker> {
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(icon, size: 18, color: Colors.white),
-                    const SizedBox(width: 8),
+                    if (icon != null) ...[
+                      Icon(icon, size: 17, color: Colors.white),
+                      const SizedBox(width: 7),
+                    ],
                     Flexible(
                       child: Text(
                         label,
+                        textAlign: TextAlign.center,
                         overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
                         style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.w700,

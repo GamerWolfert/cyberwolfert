@@ -1,9 +1,9 @@
 {
     "app": "CyberWolfert Browser",
-    "version": "2.5.0",
-    "build": 24,
+    "version": "2.5.1",
+    "build": 25,
     "minVersion": "1.0.0",
-    "notes": "WolfSyn met GIF's, stickers en emoji (Discord-achtige kiezer) plus instellingen-overlay; zoekopdrachten over het hele web; CyberWolf AI schrijft en draait scripts zonder weigeringen; langere AI-timeouts zodat de AI nooit meer offline lijkt.",
+    "notes": "GIF-tegels en WolfSyn-instellingen nu identiek aan Discord; e-mailverificatie werkt via Gmail naar elk adres; AI schrijft en draait scripts zonder weigeringen.",
     "updatedAt": "2026-09-29",
     "iosUrl": ""
 }

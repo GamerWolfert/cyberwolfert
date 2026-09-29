@@ -86,6 +86,7 @@ async function sendMail(to, subject, html, text) {
   }
   try {
     await t.sendMail({ from: fromLine(), to, subject, html, text: plain });
+    console.log(`[mail] verzonden naar ${to} — ${subject}`);
     return { sent: true };
   } catch (e) {
     console.error('[mail] verzenden mislukt:', e.message);
