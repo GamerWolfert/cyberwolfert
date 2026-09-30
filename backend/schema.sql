@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS ws_servers (
   owner_id INT REFERENCES users(id) ON DELETE CASCADE,
   name VARCHAR(64) NOT NULL,
   invite_code VARCHAR(16) UNIQUE NOT NULL,
+  tag VARCHAR(24),
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE TABLE IF NOT EXISTS ws_roles (
@@ -72,6 +73,7 @@ CREATE TABLE IF NOT EXISTS ws_channels (
   server_id INT REFERENCES ws_servers(id) ON DELETE CASCADE,
   name VARCHAR(48) NOT NULL,
   kind VARCHAR(16) DEFAULT 'text',
+  category VARCHAR(48) DEFAULT 'algemeen',
   position INT DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS ws_messages (
@@ -287,6 +289,7 @@ UPDATE site_roles SET permissions = permissions || '{"mail.manage": true}'::json
 
 -- 12. AeroTalk 2.4.0: server-tags, vrienden, groeps-DM's, boosts
 ALTER TABLE ws_members ADD COLUMN IF NOT EXISTS server_tag VARCHAR(24);
+ALTER TABLE ws_members ADD COLUMN IF NOT EXISTS tag_hidden BOOLEAN NOT NULL DEFAULT FALSE;
 
 CREATE TABLE IF NOT EXISTS ws_friend_requests (
   id SERIAL PRIMARY KEY,

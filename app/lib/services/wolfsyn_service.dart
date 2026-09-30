@@ -10,12 +10,21 @@ class WolfSynService {
   Future<Map<String, dynamic>> createServer(String name) async =>
       (await _api.apiPost('/wolf/servers', {'name': name})) as Map<String, dynamic>;
 
-  Future<Map<String, dynamic>> join(String code, {String? tag}) async =>
-      (await _api.apiPost('/wolf/join', {'code': code, if (tag != null && tag.isNotEmpty) 'tag': tag}))
-          as Map<String, dynamic>;
+  Future<Map<String, dynamic>> join(String code) async =>
+      (await _api.apiPost('/wolf/join', {'code': code})) as Map<String, dynamic>;
 
+  /// Server-tag instellen — alleen voor de server-eigenaar.
   Future<Map<String, dynamic>> setServerTag(int serverId, String tag) async =>
       (await _api.apiPut('/wolf/servers/$serverId/tag', {'tag': tag})) as Map<String, dynamic>;
+
+  /// De server-tag voor jezelf verbergen (of weer tonen).
+  Future<Map<String, dynamic>> setTagHidden(int serverId, {required bool hidden}) async =>
+      (await _api.apiPost('/wolf/servers/$serverId/tag/visibility', {'hidden': hidden}))
+          as Map<String, dynamic>;
+
+  /// Server verwijderen — alleen de eigenaar (of admin).
+  Future<Map<String, dynamic>> deleteServer(int serverId) async =>
+      (await _api.apiDelete('/wolf/servers/$serverId')) as Map<String, dynamic>;
 
   Future<Map<String, dynamic>> boost(int serverId) async =>
       (await _api.apiPost('/wolf/servers/$serverId/boost', {})) as Map<String, dynamic>;
@@ -26,8 +35,19 @@ class WolfSynService {
   Future<List<dynamic>> channels(int serverId) async =>
       (await _api.apiGet('/wolf/servers/$serverId/channels')) as List<dynamic>;
 
-  Future<Map<String, dynamic>> createChannel(int serverId, String name) async =>
-      (await _api.apiPost('/wolf/servers/$serverId/channels', {'name': name}))
+  Future<Map<String, dynamic>> createChannel(int serverId, String name,
+          {String category = 'algemeen'}) async =>
+      (await _api.apiPost('/wolf/servers/$serverId/channels',
+          {'name': name, 'category': category})) as Map<String, dynamic>;
+
+  Future<void> deleteChannel(int serverId, int channelId) async {
+    await _api.apiDelete('/wolf/servers/$serverId/channels/$channelId');
+  }
+
+  Future<Map<String, dynamic>> updateChannel(int serverId, int channelId,
+          {String? name, String? category}) async =>
+      (await _api.apiPut('/wolf/servers/$serverId/channels/$channelId',
+          {if (name != null) 'name': name, if (category != null) 'category': category}))
           as Map<String, dynamic>;
 
   Future<List<dynamic>> messages(int channelId, {int before = 0}) async {

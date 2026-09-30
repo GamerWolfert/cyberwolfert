@@ -195,19 +195,24 @@ router.post('/servers', async (req, res) => {
   const name = esc(req.body?.name || 'Nieuwe server').slice(0, 64) || 'Nieuwe server';
   const invite = code();
   const s = await db.query(
-    'INSERT INTO ws_servers (owner_id, name, invite_code) VALUES ($1,$2,$3) RETURNING *',
-    [req.userId, name, invite]
+    'INSERT INTO ws_servers (owner_id, name, invite_code, tag) VALUES ($1,$2,$3,$4) RETURNING *',
+    [req.userId, name, invite, cleanTag(req.body?.tag) || null]
   );
   const server = s.rows[0];
   await db.query(
     "INSERT INTO ws_roles (server_id, name, color, can_manage, can_kick, position) VALUES ($1,'Baas','#3CFF5C',true,true,0)",
     [server.id]
   );
-  await db.query('INSERT INTO ws_channels (server_id, name, position) VALUES ($1,$2,0)', [server.id, 'algemeen']);
+  await db.query(
+    'INSERT INTO ws_channels (server_id, name, position, category) VALUES ($1,$2,0,$3)',
+    [server.id, 'algemeen', 'algemeen']
+  );
   res.json(server);
 });
 
-// Server-tag: kort label achter je naam, alleen in die server (zoals Discord).
+// Server-tag: kort label achter iedereens naam in deze server. Alleen de
+// eigenaar stelt hem in — leden krijgen hem standaard en kunnen hem per lid
+// uitzetten (tag_hidden).
 function cleanTag(v) {
   return String(v || '')
     .replace(/[^\p{L}\p{N}_\- ]/gu, '')
@@ -223,20 +228,44 @@ router.post('/join', async (req, res) => {
     'INSERT INTO ws_members (server_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
     [s.rows[0].id, req.userId]
   );
-  const tag = cleanTag(req.body?.tag);
-  if (tag) {
-    await db.query('UPDATE ws_members SET server_tag=$3 WHERE server_id=$1 AND user_id=$2', [s.rows[0].id, req.userId, tag]);
-  }
   res.json(s.rows[0]);
 });
 
-// Eigen server-tag (later wijzigen).
+// Server-tag wijzigen (alleen eigenaar).
 router.put('/servers/:id/tag', async (req, res) => {
   const sid = Number(req.params.id);
-  if (!(await isMember(req.userId, sid))) return res.status(403).json({ error: 'geen lid' });
+  if (!(await isOwner(req.userId, sid))) return res.status(403).json({ error: 'alleen de eigenaar mag de server-tag instellen' });
   const tag = cleanTag(req.body?.tag);
-  await db.query('UPDATE ws_members SET server_tag=$3 WHERE server_id=$1 AND user_id=$2', [sid, req.userId, tag || null]);
+  await db.query('UPDATE ws_servers SET tag=$2 WHERE id=$1', [sid, tag || null]);
   res.json({ ok: true, tag: tag || null });
+});
+
+// Lid zet de server-tag voor zichzelf uit (of weer aan).
+router.post('/servers/:id/tag/visibility', async (req, res) => {
+  const sid = Number(req.params.id);
+  if (!(await isMember(req.userId, sid))) return res.status(403).json({ error: 'geen lid' });
+  const hidden = req.body?.hidden !== false;
+  await db.query('UPDATE ws_members SET tag_hidden=$3 WHERE server_id=$1 AND user_id=$2', [sid, req.userId, !!hidden]);
+  res.json({ ok: true, hidden: !!hidden });
+});
+
+// Server verwijderen: eigenaar (of admin). Cascade ruimt kanalen/berichten op.
+router.delete('/servers/:id', async (req, res) => {
+  const sid = Number(req.params.id);
+  const owner = await isOwner(req.userId, sid);
+  if (!owner && !(await isAdminUser(req.userId))) {
+    return res.status(403).json({ error: 'alleen de eigenaar mag deze server verwijderen' });
+  }
+  const s = await db.query('SELECT name FROM ws_servers WHERE id=$1', [sid]);
+  if (!s.rows.length) return res.status(404).json({ error: 'server bestaat niet' });
+  if (owner) {
+    await db.query(
+      "INSERT INTO ws_message_log (kind, ref_id, username, body, reason) VALUES ('server',$1,$2,$3,'owner_delete')",
+      [sid, String(req.username || req.userId || ''), s.rows[0].name]
+    );
+  }
+  await db.query('DELETE FROM ws_servers WHERE id=$1', [sid]);
+  res.json({ ok: true, deleted: s.rows[0].name });
 });
 
 // --- Boosts (gratis, alleen visuals) ---
@@ -269,13 +298,17 @@ router.get('/servers/:id', async (req, res) => {
   const roles = await db.query('SELECT * FROM ws_roles WHERE server_id=$1 ORDER BY position', [req.params.id]);
   const members = await db.query(
     `SELECT u.id, u.username, COALESCE(p.display_name, u.display_name, u.username) AS display,
-            COALESCE(p.avatar_url, u.avatar_url) AS avatar, m.server_tag AS tag,
+            COALESCE(p.avatar_url, u.avatar_url) AS avatar,
+            CASE WHEN m.tag_hidden THEN NULL ELSE s.tag END AS tag,
+            m.tag_hidden AS tag_hidden,
             (u.last_seen > NOW() - interval '60 seconds') AS online, u.last_seen,
             COALESCE(array_agg(mr.role_id) FILTER (WHERE mr.role_id IS NOT NULL), '{}') AS roles
      FROM ws_members m JOIN users u ON u.id=m.user_id
+     JOIN ws_servers s ON s.id=m.server_id
      LEFT JOIN ws_profiles p ON p.user_id=u.id
      LEFT JOIN ws_member_roles mr ON mr.server_id=m.server_id AND mr.user_id=m.user_id
-     WHERE m.server_id=$1 GROUP BY u.id, p.display_name, p.avatar_url, u.display_name, u.username, m.server_tag`,
+     WHERE m.server_id=$1 GROUP BY u.id, p.display_name, p.avatar_url, u.display_name, u.username,
+              m.tag_hidden, s.tag`,
     [req.params.id]
   );
   const mine = await db.query(
@@ -290,16 +323,19 @@ router.get('/servers/:id', async (req, res) => {
     req.userId,
   ]);
   const boosts = bc.rows[0]?.n || 0;
-  const me = await db.query('SELECT server_tag FROM ws_members WHERE server_id=$1 AND user_id=$2', [
-    req.params.id,
-    req.userId,
-  ]);
+  const me = await db.query(
+    'SELECT tag_hidden FROM ws_members WHERE server_id=$1 AND user_id=$2',
+    [req.params.id, req.userId]
+  );
+  const tagHidden = !!me.rows[0]?.tag_hidden;
   res.json({
     server: s.rows[0],
     roles: roles.rows,
     members: members.rows,
     myRights: { manage: owner || !!mine.rows[0]?.manage, kick: owner || !!mine.rows[0]?.kick, owner },
-    myTag: me.rows[0]?.server_tag || null,
+    serverTag: s.rows[0]?.tag || null,
+    tagHidden,
+    myTag: !tagHidden && s.rows[0]?.tag ? s.rows[0].tag : null,
     boost: { boosts, level: boostLevel(boosts), mine: !!bc.rows[0]?.mine },
   });
 });
@@ -351,14 +387,62 @@ router.get('/servers/:id/channels', async (req, res) => {
   res.json(r.rows);
 });
 
+// Kanaalcategorie (sidebar-groep) netjes houden.
+function cleanCategory(v) {
+  const s = String(v || '')
+    .replace(/[^\p{L}\p{N}_\- ]/gu, '')
+    .trim()
+    .slice(0, 48);
+  return s || 'algemeen';
+}
+
 router.post('/servers/:id/channels', async (req, res) => {
   if (!(await canDo(req.userId, req.params.id, 'manage'))) {
     return res.status(403).json({ error: 'geen recht' });
   }
-  const r = await db.query('INSERT INTO ws_channels (server_id, name) VALUES ($1,$2) RETURNING *', [
+  const r = await db.query(
+    'INSERT INTO ws_channels (server_id, name, category) VALUES ($1,$2,$3) RETURNING *',
+    [
+      req.params.id,
+      esc(req.body?.name || 'nieuw-kanaal').slice(0, 48).toLowerCase().replace(/\s+/g, '-'),
+      cleanCategory(req.body?.category),
+    ]
+  );
+  res.json(r.rows[0]);
+});
+
+router.delete('/servers/:id/channels/:cid', async (req, res) => {
+  if (!(await canDo(req.userId, req.params.id, 'manage'))) {
+    return res.status(403).json({ error: 'geen recht' });
+  }
+  const r = await db.query('DELETE FROM ws_channels WHERE id=$1 AND server_id=$2 RETURNING id', [
+    req.params.cid,
     req.params.id,
-    esc(req.body?.name || 'nieuw-kanaal').slice(0, 48).toLowerCase().replace(/\s+/g, '-'),
   ]);
+  if (!r.rows.length) return res.status(404).json({ error: 'kanaal bestaat niet' });
+  res.json({ ok: true });
+});
+
+// Kanaal hernoemen / naar een andere categorie verplaatsen.
+router.put('/servers/:id/channels/:cid', async (req, res) => {
+  if (!(await canDo(req.userId, req.params.id, 'manage'))) {
+    return res.status(403).json({ error: 'geen recht' });
+  });
+  const cur = await db.query('SELECT * FROM ws_channels WHERE id=$1 AND server_id=$2', [
+    req.params.cid,
+    req.params.id,
+  ]);
+  if (!cur.rows.length) return res.status(404).json({ error: 'kanaal bestaat niet' });
+  const naam = req.body?.name
+    ? esc(req.body.name).slice(0, 48).toLowerCase().replace(/\s+/g, '-')
+    : cur.rows[0].name;
+  const cat = req.body?.category !== undefined
+    ? cleanCategory(req.body.category)
+    : cur.rows[0].category;
+  const r = await db.query(
+    'UPDATE ws_channels SET name=$3, category=$4 WHERE id=$1 AND server_id=$2 RETURNING *',
+    [req.params.cid, req.params.id, naam, cat]
+  );
   res.json(r.rows[0]);
 });
 
@@ -375,9 +459,11 @@ router.get('/channels/:id/messages', async (req, res) => {
   const r = await db.query(
     `SELECT m.*, COALESCE(p.display_name, u.display_name, u.username) AS display,
             COALESCE(p.avatar_url, u.avatar_url) AS avatar, u.username,
-            mm.server_tag AS tag
+            CASE WHEN mm.tag_hidden THEN NULL ELSE s.tag END AS tag
      FROM ws_messages m JOIN users u ON u.id=m.user_id
      LEFT JOIN ws_profiles p ON p.user_id=u.id
+     JOIN ws_channels c ON c.id=m.channel_id
+     JOIN ws_servers s ON s.id=c.server_id
      LEFT JOIN ws_members mm ON mm.user_id=m.user_id AND mm.server_id=$4
      WHERE m.channel_id=$1 AND ($3::int IS NULL OR m.id < $3)
      ORDER BY m.id DESC LIMIT $2`,

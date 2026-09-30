@@ -687,7 +687,6 @@ class _WolfSynScreenState extends State<WolfSynScreen>
   Future<void> _serverDialog() async {
     final naam = TextEditingController();
     final code = TextEditingController();
-    final tag = TextEditingController();
     final tab = await showDialog<String>(
       context: context,
       builder: (_) => AlertDialog(
@@ -703,12 +702,6 @@ class _WolfSynScreenState extends State<WolfSynScreen>
                 controller: code,
                 decoration: const InputDecoration(
                     labelText: 'Of join-code plakken')),
-            TextField(
-                controller: tag,
-                maxLength: 24,
-                decoration: const InputDecoration(
-                    labelText: 'Server-tag (achter je naam)',
-                    helperText: 'Bijv. Wolf, Builder, Admin')),
           ],
         ),
         actions: [
@@ -728,7 +721,7 @@ class _WolfSynScreenState extends State<WolfSynScreen>
       if (tab == 'nieuw' && naam.text.trim().isNotEmpty) {
         await _api.createServer(naam.text.trim());
       } else if (tab == 'join' && code.text.trim().isNotEmpty) {
-        await _api.join(code.text.trim(), tag: tag.text.trim());
+        await _api.join(code.text.trim());
       } else {
         return;
       }
@@ -897,18 +890,22 @@ class ServerScreen extends StatefulWidget {
 class _ServerScreenState extends State<ServerScreen> {
   final _api = WolfSynService();
   final _msg = TextEditingController();
+  final _focus = FocusNode();
   List<dynamic> _channels = [];
   List<dynamic> _messages = [];
   List<dynamic> _members = [];
   List<dynamic> _roles = [];
   Map<String, dynamic> _rights = {};
+  Map<String, dynamic> _server = {};
   String _invite = '';
-  String _myTag = '';
+  String _serverTag = '';
+  bool _tagHidden = false;
   int _boosts = 0;
   int _boostLevel = 0;
   bool _myBoost = false;
   int? _channelId;
   bool _busy = true;
+  bool _showMembers = true;
   Timer? _poll;
   Timer? _tick;
 
@@ -932,6 +929,7 @@ class _ServerScreenState extends State<ServerScreen> {
     _poll?.cancel();
     _tick?.cancel();
     _msg.dispose();
+    _focus.dispose();
     super.dispose();
   }
 
@@ -945,8 +943,10 @@ class _ServerScreenState extends State<ServerScreen> {
         _members = (d['members'] ?? []) as List<dynamic>;
         _roles = (d['roles'] ?? []) as List<dynamic>;
         _rights = ((d['myRights'] ?? {}) as Map).cast<String, dynamic>();
-        _invite = ((d['server'] ?? {})['invite_code'] ?? '').toString();
-        _myTag = (d['myTag'] ?? '').toString();
+        _server = ((d['server'] ?? {}) as Map).cast<String, dynamic>();
+        _invite = (_server['invite_code'] ?? '').toString();
+        _serverTag = (d['serverTag'] ?? '').toString();
+        _tagHidden = d['tagHidden'] == true;
         _boosts = (boost['boosts'] as num?)?.toInt() ?? 0;
         _boostLevel = (boost['level'] as num?)?.toInt() ?? 0;
         _myBoost = boost['mine'] == true;
@@ -982,14 +982,19 @@ class _ServerScreenState extends State<ServerScreen> {
     final t = _msg.text.trim();
     if (t.isEmpty || _channelId == null) return;
     _msg.clear();
+    // Direct weer verder typen: focus terug naar het invoerveld.
+    _focus.requestFocus();
     try {
       await _api.send(_channelId!, t);
       _loadMessages();
+      _focus.requestFocus();
     } catch (e) {
+      _msg.text = t;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text(e.toString().replaceFirst('Exception: ', ''))));
       }
+      _focus.requestFocus();
     }
   }
 
@@ -999,6 +1004,10 @@ class _ServerScreenState extends State<ServerScreen> {
         .where((c) => (c['id'] as num).toInt() == _channelId)
         .map((c) => (c['name'] ?? '').toString())
         .fold<String>('', (a, b) => b);
+    final width = MediaQuery.of(context).size.width;
+    // Discord-layout: kanaallijst links, chat midden, ledenlijst rechts.
+    // Op telefoonbreedte is de ledenlijst optioneel (knop in de balk).
+    final showMembers = _showMembers && width >= 860;
     return Scaffold(
       appBar: AppBar(
         title: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -1034,17 +1043,21 @@ class _ServerScreenState extends State<ServerScreen> {
                   : 'Boost deze server — gratis',
               onPressed: _boostToggle),
           IconButton(
-              icon: const Icon(Icons.sell),
-              tooltip: 'Mijn server-tag ($_myTag)',
-              onPressed: _tagDialog),
+              icon: Icon(Icons.sell,
+                  color: _serverTag.isNotEmpty && !_tagHidden
+                      ? const Color(0xFF3CFF5C)
+                      : Colors.white54),
+              tooltip: _rights['owner'] == true
+                  ? 'Server-tag instellen ($_serverTag)'
+                  : _tagHidden
+                      ? 'Server-tag is uit — zet hem aan'
+                      : 'Server-tag: $_serverTag (uitzetten)',
+              onPressed: _tagSheet),
           IconButton(
-              icon: const Icon(Icons.group),
-              tooltip: 'Leden en rollen',
-              onPressed: _membersSheet),
-          IconButton(
-              icon: const Icon(Icons.tag),
-              tooltip: 'Kanalen',
-              onPressed: _channelsSheet),
+              icon: Icon(Icons.group,
+                  color: showMembers ? const Color(0xFF3CFF5C) : Colors.white54),
+              tooltip: 'Leden tonen/verbergen',
+              onPressed: () => setState(() => _showMembers = !_showMembers)),
           IconButton(
               icon: const Icon(Icons.share),
               tooltip: 'Uitnodigingscode',
@@ -1062,118 +1075,326 @@ class _ServerScreenState extends State<ServerScreen> {
                   ),
                 );
               }),
+          if (_rights['owner'] == true)
+            IconButton(
+                icon: const Icon(Icons.delete_outline),
+                tooltip: 'Server verwijderen',
+                onPressed: _deleteServerDialog),
         ],
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: _busy
-                ? const Center(child: CircularProgressIndicator())
-                : _channelId == null
-                    ? const Center(child: Text('Nog geen kanalen.'))
-                    : ListView.builder(
-                        padding: const EdgeInsets.all(12),
-                        itemCount: _messages.length,
-                        itemBuilder: (ctx, i) {
-                          final m =
-                              _messages[i] as Map<String, dynamic>;
-                          final a = _authorOf(m);
-                          final roles = (a['roles'] as List).cast<dynamic>();
-                          return Padding(
-                            padding:
-                                const EdgeInsets.symmetric(vertical: 4),
-                            child: Row(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.start,
-                              children: [
-                                _avatar(a),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Wrap(
-                                        spacing: 6,
-                                        crossAxisAlignment:
-                                            WrapCrossAlignment.center,
-                                        children: [
-                                          Text(
-                                              (a['display'] ?? '?')
-                                                  .toString(),
-                                              style: const TextStyle(
-                                                  fontWeight:
-                                                      FontWeight.bold)),
-                                          if ((a['tag'] ?? '')
-                                              .toString()
-                                              .isNotEmpty)
-                                            _tagChip(a['tag'].toString()),
-                                          ...roles.map((r) =>
-                                              Container(
-                                                padding: const EdgeInsets
-                                                    .symmetric(
-                                                    horizontal: 6,
-                                                    vertical: 1),
-                                                decoration: BoxDecoration(
-                                                  color: _colorOf(
-                                                      ((r is Map
-                                                              ? r['color']
-                                                              : null) ??
-                                                          '#3CFF5C')
-                                                          .toString()),
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                          8),
-                                                ),
-                                                child: Text(
-                                                    ((r is Map
-                                                            ? r['name']
-                                                            : r) ?? '')
-                                                        .toString(),
-                                                    style: const TextStyle(
-                                                        fontSize: 10)),
-                                              )),
-                                        ],
-                                      ),
-                                      GifBody((m['body'] ?? '').toString()),
-                                      if (m['expires_at'] != null)
-                                        _expiry(m['expires_at']),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
+      body: _busy
+          ? const Center(child: CircularProgressIndicator())
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _channelSidebar(),
+                Expanded(child: _chatPane()),
+                if (showMembers) _memberList(),
+              ],
+            ),
+    );
+  }
+
+  /// Chatkolom: berichten + invoerveld (focus blijft na verzenden).
+  Widget _chatPane() {
+    if (_channelId == null) {
+      return const Center(child: Text('Nog geen kanalen.'));
+    }
+    return Column(
+      children: [
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.all(12),
+            itemCount: _messages.length,
+            itemBuilder: (ctx, i) {
+              final m = _messages[i] as Map<String, dynamic>;
+              final a = _authorOf(m);
+              final roles = (a['roles'] as List).cast<dynamic>();
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _avatar(a),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Wrap(
+                            spacing: 6,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              Text((a['display'] ?? '?').toString(),
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold)),
+                              if ((a['tag'] ?? '').toString().isNotEmpty)
+                                _tagChip(a['tag'].toString()),
+                              ...roles.map((r) => Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 1),
+                                    decoration: BoxDecoration(
+                                      color: _colorOf(
+                                          ((r is Map ? r['color'] : null) ??
+                                                  '#3CFF5C')
+                                              .toString()),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                        ((r is Map ? r['name'] : r) ?? '')
+                                            .toString(),
+                                        style: const TextStyle(fontSize: 10)),
+                                  )),
+                            ],
+                          ),
+                          GifBody((m['body'] ?? '').toString()),
+                          if (m['expires_at'] != null)
+                            _expiry(m['expires_at']),
+                        ],
                       ),
-          ),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _msg,
-                      onSubmitted: (_) => _send(),
-                      decoration: const InputDecoration(
-                          hintText: 'Bericht…  (/delete om te wissen)',
-                          border: OutlineInputBorder()),
                     ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+        SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _msg,
+                    focusNode: _focus,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: (_) => _send(),
+                    decoration: const InputDecoration(
+                        hintText: 'Bericht…  (/delete om te wissen)',
+                        border: OutlineInputBorder()),
                   ),
-                  IconButton(
-                      tooltip: 'GIF of emoji',
-                      onPressed: () => wolfPickGif(context, _msg, _send),
-                      icon: const Icon(Icons.gif_box_outlined)),
-                  IconButton(
-                      onPressed: _send, icon: const Icon(Icons.send)),
-                ],
-              ),
+                ),
+                IconButton(
+                    tooltip: 'GIF of emoji',
+                    onPressed: () => wolfPickGif(context, _msg, _send),
+                    icon: const Icon(Icons.gif_box_outlined)),
+                IconButton(
+                    onPressed: _send, icon: const Icon(Icons.send)),
+              ],
             ),
           ),
+        ),
+      ],
+    );
+  }
+
+  /// Kanaallijst links, gegroepeerd per categorie (Discord-stijl).
+  Widget _channelSidebar() {
+    final manage = _rights['manage'] == true;
+    final cats = <String, List<dynamic>>{};
+    for (final c in _channels) {
+      if (c is! Map) continue;
+      final cat = (c['category'] ?? 'algemeen').toString();
+      cats.putIfAbsent(cat, () => <dynamic>[]).add(c);
+    }
+    return Container(
+      width: 190,
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.35),
+        border: const Border(right: BorderSide(color: Colors.white12)),
+      ),
+      child: ListView(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 10),
+            child: Row(children: [
+              const Expanded(
+                child: Text('KANALEN',
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white54)),
+              ),
+              if (manage)
+                InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: _newChannelDialog,
+                  child: const Tooltip(
+                      message: 'Kanaal maken',
+                      child: Icon(Icons.add, size: 18, color: Colors.white54)),
+                ),
+            ]),
+          ),
+          for (final entry in cats.entries) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+              child: Text(entry.key.toUpperCase(),
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white38)),
+            ),
+            ...entry.value.map((c) {
+              final id = (c['id'] as num).toInt();
+              final naam = (c['name'] ?? '').toString();
+              final sel = id == _channelId;
+              return InkWell(
+                onTap: () {
+                  setState(() => _channelId = id);
+                  _loadMessages();
+                },
+                onLongPress: manage
+                    ? () => _channelMenu(c)
+                    : null,
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: sel ? Colors.white12 : null,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(children: [
+                    const Icon(Icons.tag, size: 15, color: Colors.white54),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text('# $naam',
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: 13,
+                              color: sel
+                                  ? Colors.white
+                                  : Colors.white70)),
+                    ),
+                  ]),
+                ),
+              );
+            }),
+          ],
         ],
       ),
     );
+  }
+
+  /// Ledenlijst rechts: eerst per rol, daarna Online en Offline (Discord).
+  Widget _memberList() {
+    final members = _members.whereType<Map<String, dynamic>>().toList();
+    bool online(Map<String, dynamic> m) => m['online'] == true;
+    final used = <int>{};
+    final groups = <_MemberGroup>[];
+
+    for (final role in _roles.whereType<Map<String, dynamic>>()) {
+      final rid = (role['id'] as num).toInt();
+      final has = members
+          .where((m) =>
+              !used.contains((m['id'] as num).toInt()) &&
+              ((m['roles'] ?? []) as List).any((x) => (x as num).toInt() == rid))
+          .toList();
+      if (has.isEmpty) continue;
+      for (final m in has) {
+        used.add((m['id'] as num).toInt());
+      }
+      groups.add(_MemberGroup(
+          label: (role['name'] ?? '').toString(),
+          color: _colorOf((role['color'] ?? '#3CFF5C').toString()),
+          members: has));
+    }
+    final rest = members.where((m) => !used.contains((m['id'] as num).toInt()));
+    final on = rest.where(online).toList();
+    final off = rest.where((m) => !online(m)).toList();
+    if (on.isNotEmpty) {
+      groups.add(_MemberGroup(label: 'Online', color: Colors.greenAccent, members: on));
+    }
+    if (off.isNotEmpty) {
+      groups.add(
+          _MemberGroup(label: 'Offline', color: Colors.white54, members: off));
+    }
+
+    return Container(
+      width: 210,
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.35),
+        border: const Border(left: BorderSide(color: Colors.white12)),
+      ),
+      child: ListView(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        children: [
+          if (_rights['manage'] == true)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 2, 8, 4),
+              child: TextButton.icon(
+                onPressed: _roleDialog,
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('Nieuwe rol',
+                    style: TextStyle(fontSize: 12)),
+              ),
+            ),
+          for (final g in groups) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+              child: Text(
+                  '${g.label.toUpperCase()} — ${g.members.length}',
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: g.color.withValues(alpha: 0.75))),
+            ),
+            ...g.members.map((m) {
+              final naam = (m['display'] ?? m['username'] ?? '?').toString();
+              final tag = (m['tag'] ?? '').toString();
+              return InkWell(
+                onTap: () => _memberActions(m),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                  child: Row(children: [
+                    wolfOnline(_memberAvatar(m), m['online'] == true, dot: 8),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Wrap(
+                          spacing: 5,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Text(naam,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    color: m['online'] == true
+                                        ? Colors.white
+                                        : Colors.white54)),
+                            if (tag.isNotEmpty) _tagChip(tag),
+                          ]),
+                    ),
+                  ]),
+                ),
+              );
+            }),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _memberAvatar(Map<String, dynamic> m) {
+    final url = m['avatar']?.toString();
+    final name = (m['display'] ?? m['username'] ?? '?').toString();
+    if (url != null && url.isNotEmpty) {
+      return CircleAvatar(
+          radius: 12,
+          backgroundImage: NetworkImage(url),
+          onBackgroundImageError: (_, __) {},
+          child: Text(name.characters.first.toUpperCase(),
+              style: const TextStyle(fontSize: 11)));
+    }
+    return CircleAvatar(
+        radius: 12,
+        child: Text(name.characters.first.toUpperCase(),
+            style: const TextStyle(fontSize: 11)));
   }
 
   Widget _expiry(dynamic raw) {
@@ -1255,24 +1476,144 @@ class _ServerScreenState extends State<ServerScreen> {
                 const TextStyle(fontSize: 10, color: Colors.lightBlueAccent)),
       );
 
-  Future<void> _tagDialog() async {
-    final c = TextEditingController(text: _myTag);
+  /// Server-tag: eigenaar stelt hem in, leden kunnen hem uitzetten.
+  Future<void> _tagSheet() async {
+    final owner = _rights['owner'] == true;
+    final c = TextEditingController(text: _serverTag);
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.only(
+              left: 16,
+              right: 16,
+              top: 16,
+              bottom: 16 + MediaQuery.of(ctx).viewInsets.bottom),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Server-tag',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 6),
+              Text(
+                owner
+                    ? 'Kort label dat achter iedereens naam verschijnt in deze server. Alleen jij (eigenaar) stelt hem in.'
+                    : 'De server-tag staat achter iedereens naam. Jij kunt hem voor jezelf uitzetten.',
+                style: const TextStyle(fontSize: 12, color: Colors.white70),
+              ),
+              const SizedBox(height: 12),
+              if (owner)
+                TextField(
+                  controller: c,
+                  maxLength: 24,
+                  decoration: const InputDecoration(
+                      labelText: 'Tag (bijv. diddy, Builder)',
+                      helperText: 'Leeg laten = geen tag'),
+                )
+              else ...[
+                if (_serverTag.isNotEmpty)
+                  Chip(
+                      avatar: const Icon(Icons.sell, size: 16),
+                      label: Text(_serverTag)),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Server-tag tonen'),
+                  value: !_tagHidden,
+                  onChanged: (v) async {
+                    try {
+                      await _api.setTagHidden(widget.serverId, hidden: !v);
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      _load();
+                    } catch (e) {
+                      _snack(e);
+                    }
+                  },
+                ),
+              ],
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('Sluiten')),
+                  if (owner)
+                    FilledButton(
+                      onPressed: () async {
+                        try {
+                          await _api.setServerTag(
+                              widget.serverId, c.text.trim());
+                          if (ctx.mounted) Navigator.pop(ctx);
+                          _load();
+                        } catch (e) {
+                          _snack(e);
+                        }
+                      },
+                      child: const Text('Opslaan'),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Server verwijderen (alleen eigenaar) — ruimt kanalen/berichten op.
+  Future<void> _deleteServerDialog() async {
+    final naam = _server['name']?.toString() ?? widget.serverName;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Server verwijderen?'),
+        content: Text(
+            'De server "$naam" en alle kanalen, berichten en rollen worden permanent verwijderd. Dit kan niet ongedaan worden gemaakt.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Annuleren')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Definitief verwijderen'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await _api.deleteServer(widget.serverId);
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Server "$naam" verwijderd.')));
+    } catch (e) {
+      _snack(e);
+    }
+  }
+
+  /// Nieuw kanaal met categorie (Discord-groep in de sidebar).
+  Future<void> _newChannelDialog() async {
+    final naam = TextEditingController();
+    final cat = TextEditingController(text: _bestaandeCategorie());
     await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Mijn server-tag'),
+        title: const Text('Nieuw kanaal'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text(
-                'Kort label dat achter je naam verschijnt in deze server.',
-                style: TextStyle(fontSize: 12)),
             TextField(
-              controller: c,
-              maxLength: 24,
-              decoration:
-                  const InputDecoration(labelText: 'Tag (bijv. Wolf, Builder)'),
-            ),
+                controller: naam,
+                decoration:
+                    const InputDecoration(labelText: 'Kanaalnaam (zonder #)')),
+            TextField(
+                controller: cat,
+                decoration: const InputDecoration(
+                    labelText: 'Categorie',
+                    helperText: 'Bijv. algemeen, memes, voice')),
           ],
         ),
         actions: [
@@ -1281,19 +1622,106 @@ class _ServerScreenState extends State<ServerScreen> {
               child: const Text('Annuleren')),
           FilledButton(
             onPressed: () async {
+              final n = naam.text.trim();
+              if (n.isEmpty) return;
               try {
-                await _api.setServerTag(widget.serverId, c.text.trim());
+                await _api.createChannel(widget.serverId, n,
+                    category: cat.text.trim());
                 if (ctx.mounted) Navigator.pop(ctx);
                 _load();
               } catch (e) {
                 _snack(e);
               }
             },
-            child: const Text('Opslaan'),
+            child: const Text('Maken'),
           ),
         ],
       ),
     );
+  }
+
+  String _bestaandeCategorie() {
+    for (final c in _channels) {
+      if (c is Map) return (c['category'] ?? 'algemeen').toString();
+    }
+    return 'algemeen';
+  }
+
+  /// Lang drukken op een kanaal: hernoemen (categorie) of verwijderen.
+  Future<void> _channelMenu(dynamic ch) async {
+    if (ch is! Map) return;
+    final id = (ch['id'] as num).toInt();
+    final naam = (ch['name'] ?? '').toString();
+    final actie = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+                leading: const Icon(Icons.edit),
+                title: Text('Kanaal "#$naam" hernoemen / verplaatsen'),
+                onTap: () => Navigator.pop(ctx, 'ren')),
+            ListTile(
+                leading: const Icon(Icons.delete, color: Colors.redAccent),
+                title: const Text('Kanaal verwijderen'),
+                onTap: () => Navigator.pop(ctx, 'del')),
+            ListTile(
+                leading: const Icon(Icons.close),
+                title: const Text('Annuleren'),
+                onTap: () => Navigator.pop(ctx)),
+          ],
+        ),
+      ),
+    );
+    if (actie == 'del') {
+      try {
+        await _api.deleteChannel(widget.serverId, id);
+        if (_channelId == id) _channelId = null;
+        _load();
+      } catch (e) {
+        _snack(e);
+      }
+    } else if (actie == 'ren') {
+      if (!mounted) return;
+      final c = TextEditingController(text: naam);
+      final cat = TextEditingController(
+          text: (ch['category'] ?? 'algemeen').toString());
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Kanaal aanpassen'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                  controller: c,
+                  decoration: const InputDecoration(labelText: 'Naam')),
+              TextField(
+                  controller: cat,
+                  decoration: const InputDecoration(labelText: 'Categorie')),
+            ],
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Annuleren')),
+            FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Opslaan')),
+          ],
+        ),
+      );
+      if (ok == true) {
+        try {
+          await _api.updateChannel(widget.serverId, id,
+              name: c.text.trim(), category: cat.text.trim());
+          _load();
+        } catch (e) {
+          _snack(e);
+        }
+      }
+    }
   }
 
   Future<void> _boostToggle() async {
@@ -1318,130 +1746,55 @@ class _ServerScreenState extends State<ServerScreen> {
         content: Text(e.toString().replaceFirst('Exception: ', ''))));
   }
 
-  Future<void> _channelsSheet() async {
-    final manage = _rights['manage'] == true;
-    final naam = TextEditingController();
-    await showModalBottomSheet(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('Kanalen',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-              ..._channels.map((c) => ListTile(
-                    leading: const Icon(Icons.tag, size: 18),
-                    title: Text((c['name'] ?? '').toString()),
-                    trailing: (c['id'] as num).toInt() == _channelId
-                        ? const Icon(Icons.check, size: 18)
-                        : null,
-                    onTap: () {
-                      setState(() => _channelId =
-                          (c['id'] as num).toInt());
-                      _loadMessages();
-                      Navigator.pop(ctx);
-                    },
-                  )),
-              if (manage)
-                Row(children: [
-                  Expanded(
-                    child: TextField(
-                        controller: naam,
-                        decoration: const InputDecoration(
-                            labelText: 'Nieuw kanaal')),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.add),
-                    onPressed: () async {
-                      if (naam.text.trim().isEmpty) return;
-                      await _api.createChannel(
-                          widget.serverId, naam.text.trim());
-                      if (mounted) Navigator.pop(ctx);
-                      _load();
-                    },
-                  ),
-                ]),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _membersSheet() async {
+  /// Acties voor één lid (uit de rechterledenlijst): rollen + kicken.
+  Future<void> _memberActions(Map<String, dynamic> m) async {
     final manage = _rights['manage'] == true;
     final kick = _rights['kick'] == true;
+    final uid = (m['id'] as num).toInt();
+    final naam = (m['display'] ?? m['username'] ?? '?').toString();
+    final ids = ((m['roles'] ?? []) as List)
+        .map((r) => (r as num).toInt())
+        .toList();
     await showModalBottomSheet(
       context: context,
-      isScrollControlled: true,
       builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('Leden en rollen',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-              if (manage)
-                TextButton.icon(
-                  onPressed: () => _roleDialog(),
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('Nieuwe rol'),
-                ),
-              Flexible(
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: _members.length,
-                  itemBuilder: (c2, i) {
-                    final m = _members[i] as Map<String, dynamic>;
-                    final ids =
-                        ((m['roles'] ?? []) as List).cast<dynamic>();
-                    final roleObjs = _roles
-                        .where((r) => r is Map && ids.contains(r['id']))
-                        .toList();
-                    final naam =
-                        (m['display'] ?? m['username'] ?? '?').toString();
-                    final tag = (m['tag'] ?? '').toString();
-                    return ListTile(
-                      leading: wolfOnline(_avatar(m), m['online'] == true),
-                      title: Wrap(
-                          spacing: 6,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            Text(naam),
-                            if (tag.isNotEmpty) _tagChip(tag),
-                          ]),
-                      subtitle: roleObjs.isEmpty
-                          ? null
-                          : Text(roleObjs
-                              .map((r) => ((r as Map)['name'] ?? '').toString())
-                              .join(', ')),
-                      trailing: kick
-                          ? IconButton(
-                              icon: const Icon(Icons.person_remove,
-                                  size: 20),
-                              onPressed: () async {
-                                await _api.kick(widget.serverId,
-                                    (m['id'] as num).toInt());
-                                if (mounted) Navigator.pop(ctx);
-                                _load();
-                              },
-                            )
-                          : null,
-                      onTap: manage
-                          ? () => _rolesDialog(
-                              (m['id'] as num).toInt(),
-                              naam,
-                              ids.map((r) => (r as num).toInt()).toList())
-                          : null,
-                    );
-                  },
-                ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: wolfOnline(_memberAvatar(m), m['online'] == true),
+              title: Text(naam),
+              subtitle: Text(m['online'] == true ? 'Online' : 'Offline'),
+            ),
+            if (manage)
+              ListTile(
+                leading: const Icon(Icons.workspace_premium),
+                title: const Text('Rollen toekennen'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _rolesDialog(uid, naam, ids);
+                },
               ),
-            ],
-          ),
+            if (kick)
+              ListTile(
+                leading: const Icon(Icons.person_remove, color: Colors.redAccent),
+                title: const Text('Lid kicken'),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  try {
+                    await _api.kick(widget.serverId, uid);
+                    _load();
+                  } catch (e) {
+                    _snack(e);
+                  }
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.close),
+              title: const Text('Annuleren'),
+              onTap: () => Navigator.pop(ctx),
+            ),
+          ],
         ),
       ),
     );
@@ -1537,6 +1890,15 @@ class _ServerScreenState extends State<ServerScreen> {
   }
 }
 
+/// Groep in de rechterledenlijst: een rol, of "Online"/"Offline".
+class _MemberGroup {
+  final String label;
+  final Color color;
+  final List<Map<String, dynamic>> members;
+  const _MemberGroup(
+      {required this.label, required this.color, required this.members});
+}
+
 /// 1-op-1 DM-gesprek.
 class DmScreen extends StatefulWidget {
   final int userId;
@@ -1555,6 +1917,7 @@ class DmScreen extends StatefulWidget {
 class _DmScreenState extends State<DmScreen> {
   final _api = WolfSynService();
   final _msg = TextEditingController();
+  final _focus = FocusNode();
   List<dynamic> _messages = [];
   Timer? _poll;
   Timer? _tick;
@@ -1583,6 +1946,7 @@ class _DmScreenState extends State<DmScreen> {
     _poll?.cancel();
     _tick?.cancel();
     _msg.dispose();
+    _focus.dispose();
     super.dispose();
   }
 
@@ -1597,15 +1961,19 @@ class _DmScreenState extends State<DmScreen> {
     final t = _msg.text.trim();
     if (t.isEmpty) return;
     _msg.clear();
+    _focus.requestFocus();
     try {
       await _api.sendDm(widget.userId, t);
       _load();
+      _focus.requestFocus();
     } catch (e) {
+      _msg.text = t;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content:
                 Text(e.toString().replaceFirst('Exception: ', ''))));
       }
+      _focus.requestFocus();
     }
   }
 
@@ -1696,9 +2064,10 @@ class _DmScreenState extends State<DmScreen> {
                   Expanded(
                     child: TextField(
                       controller: _msg,
+                      focusNode: _focus,
                       onSubmitted: (_) => _send(),
                       decoration: const InputDecoration(
-                          hintText: 'Bericht…',
+                          hintText: 'Bericht.',
                           border: OutlineInputBorder()),
                     ),
                   ),
@@ -1731,6 +2100,7 @@ class GroupScreen extends StatefulWidget {
 class _GroupScreenState extends State<GroupScreen> {
   final _api = WolfSynService();
   final _msg = TextEditingController();
+  final _focus = FocusNode();
   List<dynamic> _messages = [];
   List<dynamic> _members = [];
   Map<String, dynamic> _group = {};
@@ -1761,6 +2131,7 @@ class _GroupScreenState extends State<GroupScreen> {
     _poll?.cancel();
     _tick?.cancel();
     _msg.dispose();
+    _focus.dispose();
     super.dispose();
   }
 
@@ -1782,11 +2153,15 @@ class _GroupScreenState extends State<GroupScreen> {
     final t = _msg.text.trim();
     if (t.isEmpty) return;
     _msg.clear();
+    _focus.requestFocus();
     try {
       await _api.sendGroup(widget.groupId, t);
       _load();
+      _focus.requestFocus();
     } catch (e) {
+      _msg.text = t;
       _snack(e);
+      _focus.requestFocus();
     }
   }
 
@@ -1966,9 +2341,10 @@ class _GroupScreenState extends State<GroupScreen> {
                   Expanded(
                     child: TextField(
                       controller: _msg,
+                      focusNode: _focus,
                       onSubmitted: (_) => _send(),
                       decoration: const InputDecoration(
-                          hintText: 'Bericht naar de groep…  (/delete om te wissen)',
+                          hintText: 'Bericht naar de groep.  (/delete om te wissen)',
                           border: OutlineInputBorder()),
                     ),
                   ),

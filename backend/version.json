@@ -1,9 +1,9 @@
 {
     "app": "AeroSurf Browser",
-    "version": "2.7.0",
-    "build": 34,
+    "version": "2.8.0",
+    "build": 35,
     "minVersion": "1.0.0",
-    "notes": "Meldingsgeluiden: Discord-geluid bij berichten, mail en verzoeken (app én website), systeemmeldingen op Android en zelf kiezen welk geluid.",
-    "updatedAt": "2026-09-30",
+    "notes": "Hey Nova: zeg 'Hey Nova' of 'Oke Nova' en stel je vraag (antwoord in beeld én uitgesproken). AeroTalk als Discord: server-tags, categorieën en eigen kanaalnamen; AeroNova tussen de zoekresultaten; officieel AeroSurf-mailontwerp.",
+    "updatedAt": "2026-10-01",
     "iosUrl": ""
 }

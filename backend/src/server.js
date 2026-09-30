@@ -64,6 +64,9 @@ const upload = multer({
 });
 app.use('/uploads', express.static(uploadDir));
 
+// Logo/afbeeldingen voor officiele e-mails (mailtemplates verwijzen hiernaartoe).
+app.use('/assets', express.static(path.join(__dirname, '..', 'assets')));
+
 function publicBase(req) {
   if (process.env.PUBLIC_URL) return String(process.env.PUBLIC_URL).replace(/\/$/, '');
   return `${req.protocol}://${req.get('host')}`;
@@ -186,6 +189,8 @@ app.listen(PORT, HOST, () => {
   if (process.env.PUBLIC_URL) console.log(`[AeroSurf] publiek via tunnel: ${process.env.PUBLIC_URL}`);
   startPresence();
   startSmtp();
+  const { startUrlWatch } = require('./url_watch');
+  startUrlWatch();
   const { send, CHANNELS } = require('./discord');
   send(CHANNELS.minipcSysteem, `Backend (her)start op poort ${PORT} — ${new Date().toISOString().slice(0, 19)}Z`);
 });

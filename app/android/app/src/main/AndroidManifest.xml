@@ -6,6 +6,8 @@
     <!-- Meldingen (berichten/mail) met geluid, ook als de app op de achtergrond draait -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
+    <!-- Hey Nova: microfoon voor spraakherkenning -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <!-- Nodig voor automatisch updaten (APK installeren vanuit de app) -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
     <!-- Alleen tot en met Android 9: APK in de gedeelde Downloadmap zetten -->
@@ -44,6 +46,10 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- Hey Nova: spraakherkenning (nodig vanaf Android 11 / SDK 30) -->
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
         </intent>
     </queries>
 </manifest>

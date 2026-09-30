@@ -5,6 +5,8 @@ import 'providers/settings_provider.dart';
 import 'providers/auth_provider.dart';
 import 'screens/browser_home.dart';
 import 'services/notify_service.dart';
+import 'services/nova_voice.dart';
+import 'widgets/nova_voice_assistant.dart';
 
 void main() {
   runApp(const CyberWolfertApp());
@@ -31,6 +33,10 @@ class _CyberWolfertAppState extends State<CyberWolfertApp> {
       if (mounted) settings.load();
       // Meldingsgeluiden + systeemmeldingen (berichten, mail, verzoeken).
       NotifyService.start();
+      // Hey Nova: microfoon weer aanzetten als die bij het vorige bezoek aan stond.
+      NovaVoice.instance.shouldAutoStart().then((on) {
+        if (on) NovaVoice.instance.start();
+      });
     });
   }
 
@@ -60,6 +66,13 @@ class _CyberWolfertAppState extends State<CyberWolfertApp> {
                 seedColor: s.accent, brightness: Brightness.dark),
           ),
           home: const BrowserHomeScreen(),
+          // Hey Nova-knop overal zichtbaar (over elke schermlaag heen).
+          builder: (ctx, child) => Stack(
+            children: [
+              child ?? const SizedBox.shrink(),
+              const NovaVoiceAssistant(),
+            ],
+          ),
         ),
       ),
     );

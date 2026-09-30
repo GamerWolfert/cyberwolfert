@@ -2,7 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 
-/// Google-like search results page for AeroSeek
+/// AeroSeek-resultatenpagina: lokale links + web, met de AeroNova-AI
+/// rechtsonder tussen de resultaten (zoals Gemini bij Google).
 class SearchResultsScreen extends StatefulWidget {
   final String query;
   final void Function(String url) onOpenUrl;
@@ -23,8 +24,13 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
   List<dynamic> _local = [];
   bool _busy = true;
   Timer? _debounce;
-  TextEditingController _ctrl = TextEditingController();
+  final TextEditingController _ctrl = TextEditingController();
   List<dynamic> _suggest = [];
+
+  // AeroNova-chat in dit zoekscherm.
+  final _chat = TextEditingController();
+  final List<Map<String, String>> _thread = [];
+  bool _aiBusy = false;
 
   @override
   void initState() {
@@ -37,6 +43,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
   void dispose() {
     _debounce?.cancel();
     _ctrl.dispose();
+    _chat.dispose();
     super.dispose();
   }
 
@@ -72,12 +79,46 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
         _local = (j['local'] ?? []) as List<dynamic>;
         _busy = false;
       });
+      // AeroNova geeft direct een antwoord bij de zoekopdracht (Gemini-stijl).
+      _askNova(q, reset: true);
     } catch (e) {
       if (mounted) {
         setState(() => _busy = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Zoeken mislukt. Probeer opnieuw.')));
+            const SnackBar(content: Text('Zoeken mislukt. Probeer opnieuw.')));
       }
+    }
+  }
+
+  /// Vraag stellen aan AeroNova; antwoord komt bovenaan tussen de resultaten.
+  Future<void> _askNova(String vraag, {bool reset = false}) async {
+    final q = vraag.trim();
+    if (q.isEmpty || _aiBusy) return;
+    setState(() {
+      _aiBusy = true;
+      if (reset) _thread.clear();
+      _thread.add({'role': 'user', 'content': q});
+    });
+    try {
+      final history = _thread
+          .sublist(0, _thread.length - 1)
+          .map((m) => {'role': m['role']!, 'content': m['content']!})
+          .toList();
+      final reply = await _api.askAi(q, history);
+      if (!mounted) return;
+      setState(() {
+        _thread.add({'role': 'assistant', 'content': reply});
+        _aiBusy = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _thread.add({
+          'role': 'assistant',
+          'content': 'Ik kon nu geen antwoord geven. Controleer de verbinding en probeer opnieuw.',
+        });
+        _aiBusy = false;
+      });
     }
   }
 
@@ -89,11 +130,11 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
           controller: _ctrl,
           onSubmitted: (_) => _search(),
           autofocus: true,
-          decoration: InputDecoration(
+          decoration: const InputDecoration(
             hintText: 'Zoek met AeroSeek…',
             border: InputBorder.none,
-            hintStyle: const TextStyle(color: Colors.white54),
-            prefixIcon: const Icon(Icons.search, color: Colors.white54),
+            hintStyle: TextStyle(color: Colors.white54),
+            prefixIcon: Icon(Icons.search, color: Colors.white54),
           ),
           style: const TextStyle(color: Colors.white, fontSize: 18),
           onChanged: (_) => _onChanged(_ctrl.text),
@@ -135,11 +176,11 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        if (_results.isNotEmpty || _local.isNotEmpty)
+        if (_results.isNotEmpty || _local.isNotEmpty || _thread.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(bottom: 16),
             child: Text(
-              '🚀 AeroSeek — ${_ctrl.text}',
+              'AeroSeek — ${_ctrl.text}',
               style: const TextStyle(
                 fontSize: 26,
                 fontWeight: FontWeight.w900,
@@ -147,9 +188,11 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
               ),
             ),
           ),
+        // AeroNova-antwoord tussen de resultaten (Google/Gemini-stijl).
+        if (_thread.isNotEmpty || _aiBusy) _novaCard(),
         if (_local.isNotEmpty) ...[
           const Padding(
-            padding: EdgeInsets.only(bottom: 8),
+            padding: EdgeInsets.only(bottom: 8, top: 16),
             child: Text(
               '⭐ Lokale prioriteitslinks',
               style: TextStyle(
@@ -227,6 +270,107 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
             ),
           ),
       ],
+    );
+  }
+
+  /// AeroNova-kaart: antwoord + vervolgvraag (loopt mee met de resultaten).
+  Widget _novaCard() {
+    final last = _thread.isNotEmpty ? _thread.last : null;
+    final isAssistant = last != null && last['role'] == 'assistant';
+    return Card(
+      color: const Color(0xFF0E1A12),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: const BorderSide(color: Color(0xFF3CFF5C), width: 1),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              const Icon(Icons.auto_awesome, size: 18, color: Color(0xFF3CFF5C)),
+              const SizedBox(width: 8),
+              const Text('AeroNova AI',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+              const Spacer(),
+              if (_aiBusy)
+                const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Color(0xFF3CFF5C))),
+            ]),
+            const SizedBox(height: 10),
+            if (_aiBusy && !isAssistant)
+              const Text('AeroNova denkt na…',
+                  style: TextStyle(color: Colors.white54)),
+            ..._thread.map((m) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (m['role'] == 'user')
+                        const Padding(
+                          padding: EdgeInsets.only(right: 8, top: 2),
+                          child: Icon(Icons.person, size: 16, color: Colors.white38),
+                        )
+                      else
+                        const Padding(
+                          padding: EdgeInsets.only(right: 8, top: 2),
+                          child: Icon(Icons.auto_awesome,
+                              size: 16, color: Color(0xFF3CFF5C)),
+                        ),
+                      Expanded(
+                        child: Text(
+                          m['content'] ?? '',
+                          style: TextStyle(
+                            color: m['role'] == 'user'
+                                ? Colors.white70
+                                : Colors.white,
+                            height: 1.45,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                )),
+            const SizedBox(height: 4),
+            Row(children: [
+              Expanded(
+                child: TextField(
+                  controller: _chat,
+                  textInputAction: TextInputAction.send,
+                  onSubmitted: (v) {
+                    final t = v.trim();
+                    _chat.clear();
+                    _askNova(t);
+                  },
+                  decoration: InputDecoration(
+                    hintText: 'Vraag het aan AeroNova…',
+                    isDense: true,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      borderSide: const BorderSide(color: Colors.white24),
+                    ),
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  ),
+                  style: const TextStyle(fontSize: 14),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.send, size: 20, color: Color(0xFF3CFF5C)),
+                onPressed: () {
+                  final t = _chat.text.trim();
+                  _chat.clear();
+                  _askNova(t);
+                },
+              ),
+            ]),
+          ],
+        ),
+      ),
     );
   }
 

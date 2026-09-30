@@ -223,17 +223,116 @@ async function forgetMemory(uid, needle) {
 }
 
 // Directe, GEEN model nodig: instant antwoorden voor de dingen die we beter zelf kunnen.
+function fmtNum(n) {
+  if (!isFinite(n)) return null;
+  if (Number.isInteger(n)) return n.toLocaleString('nl-NL');
+  return Number(n.toFixed(6)).toLocaleString('nl-NL', { maximumFractionDigits: 6 });
+}
+
+// Veilige rekenmachine: herkent "wat is 1000x2", "20% van 150", "(3+4)*2" ...
+function quickMath(raw) {
+  let s = raw.toLowerCase().trim()
+    .replace(/[?]+$/, '')
+    .replace(/\b(hoi+|hallo+|hey+|hai+|yo+|oké|ok)\b/g, ' ')
+    .replace(/\b(wat is|wat wordt|bereken|uitkomst van|reken(?: uit| uit eens)?|hoeveel is|wat zijn)\b/g, ' ')
+    .replace(/(\d)\s*[x×]\s*(?=\d)/g, '$1*')
+    .replace(/\bkeer\b/g, '*')
+    .replace(/\bgedeeld door\b/g, '/')
+    .replace(/\bplus\b/g, '+')
+    .replace(/\bmin\b/g, '-')
+    .replace(/\bvermenigvuldigd met\b|\bmaal\b|\bx\b/g, '*')
+    .replace(/\bprocent\b/g, '%')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!s || s.length > 80) return null;
+
+  // "20% van 150" / "12,5 procent van 80"
+  const pct = s.match(/^(\d+(?:[.,]\d+)?)\s*%\s*van\s+(\d+(?:[.,]\d+)?)$/);
+  if (pct) {
+    const a = parseFloat(pct[1].replace(',', '.'));
+    const b = parseFloat(pct[2].replace(',', '.'));
+    const r = fmtNum((a / 100) * b);
+    if (r) return `${fmtNum(a)}% van ${fmtNum(b)} = ${r}`;
+  }
+
+  if (!/^[\d\s+\-*/^().,%]+$/.test(s)) return null;
+  if (!/\d/.test(s) || !/[+\-*/^%]/.test(s)) return null;
+  if (/^\s*\d+(\.\d+)?\s*$/.test(s)) return null;
+
+  const expr = s.replace(/,/g, '.').replace(/\s+/g, '');
+  try {
+    const val = evalMath(expr);
+    const r = fmtNum(val);
+    if (!r) return null;
+    const nice = expr.replace(/\*/g, '×').replace(/\//g, '÷').replace(/\^/g, '^');
+    return `${nice} = ${r}`;
+  } catch (_) {
+    return null;
+  }
+}
+
+function evalMath(expr) {
+  let i = 0;
+  function peek() { return expr[i]; }
+  function eat(c) { if (expr[i] === c) { i++; return true; } return false; }
+  function expr_() {
+    let v = term();
+    for (;;) {
+      if (eat('+')) v += term();
+      else if (eat('-')) v -= term();
+      else return v;
+    }
+  }
+  function term() {
+    let v = unary();
+    for (;;) {
+      if (eat('*')) v *= unary();
+      else if (eat('/')) v /= unary();
+      else if (eat('%')) v %= unary();
+      else return v;
+    }
+  }
+  function unary() {
+    if (eat('-')) return -unary();
+    if (eat('+')) return unary();
+    return power();
+  }
+  function power() {
+    const base = primary();
+    if (eat('^')) return Math.pow(base, unary());
+    return base;
+  }
+  function primary() {
+    if (eat('(')) { const v = expr_(); if (!eat(')')) throw new Error('paren'); return v; }
+    let start = i;
+    while (i < expr.length && /[\d.]/.test(expr[i])) i++;
+    if (start === i) throw new Error('number');
+    const n = parseFloat(expr.slice(start, i));
+    if (Number.isNaN(n)) throw new Error('nan');
+    return n;
+  }
+  const out = expr_();
+  if (i !== expr.length || !isFinite(out)) throw new Error('parse');
+  return out;
+}
+
 async function quickReply(message, req) {
+
   const v = versionInfo();
   const base = process.env.PUBLIC_URL
     ? String(process.env.PUBLIC_URL).replace(/\/$/, '')
     : `${req.protocol}://${req.get('host')}`;
   const m = message.toLowerCase().trim();
 
-  if (/^(hoi|hallo|hey|hai|yo|hallo daar)\b/.test(m) && m.length < 24) {
+  // Alleen een kale begroeting -> groet terug. Meteen daarna komt een vraag
+  // (bv. "hoi wat is 1000x2") dus NÓÓT grijpen als het bericht meer bevat.
+  if (/^(hoi+|hallo+|hey+|hai+|yo+|goedemorgen|goedemiddag|goedenavond|hallo daar|hoi daar)[!.,?\s]*$/.test(m)) {
     return 'Hoi! Waar kan ik je mee helpen? 🚀';
   }
-  if (m.includes('help') || m.includes('wat kun je') || m.includes('wat kan je')) {
+  const reken = quickMath(m);
+  if (reken) return reken;
+  if (/^(help|wat kun je|wat kan je|wat doe je|jouw functies)\b/.test(m) ||
+      /\b(help me|kun je helpen)\b/.test(m)) {
     return 'Dit kan ik voor je doen:\n' +
       '• Vragen beantwoorden en uitleg geven\n' +
       '• Code en scripts schrijven — zeg bv. "maak een Python-script dat …"\n' +
@@ -266,10 +365,10 @@ async function quickReply(message, req) {
     }
     return 'Dat weet ik nog niet! Zeg "mijn naam is ..." en ik vergeet het nooit meer. 🚀';
   }
-  if (m.includes('download') || m.includes('apk') || m.includes('installeren') || m.includes('exe')) {
+  if (/\b(download|apk|installeren|installer|exe|windows-versie)\b/.test(m)) {
     return `Apps downloaden kan zo:\n• Typ het codewoord "download" in de AeroSeek-zoekbalk, of\n• Open direct: https://github.com/GamerWolfert/cyberwolfert/releases/download/v${v.version || '0.0.0'}/AeroSurf-apps.zip\nDaarin zit de Android-APK, Windows-versie en uitleg.`;
   }
-  if (m.includes('versie') || m.includes('update')) {
+  if (/^(wat is de )?(nieuwste )?versie\b|^is er (al )?een (nieuwe )?update|\bheb ik een update\b|werk ik al bij/.test(m)) {
     return `We draaien AeroSurf ${v.version || '?'} (build ${v.build || '?'}). ` +
       'Bij een nieuwe publish krijg je een update-melding bij het opstarten.';
   }
@@ -311,7 +410,9 @@ async function quickReply(message, req) {
   if (m.includes('wolfpulse') || m.includes(' zoekmachine')) {
     return 'AeroSeek is onze eigen zoekmachine: eigen links eerst, daarna resultaten via SearXNG/DuckDuckGo/Wikipedia. Alles loopt via jouw Mini-PC.';
   }
-  if (m.includes('dank')) return 'Graag gedaan! 🚀 Waar kan ik je nog mee helpen?';
+  if (/\b(bedankt|dank[je]{1,2}( wel)?|thanks|thx)\b/.test(m) && m.length < 60) {
+    return 'Graag gedaan! 🚀 Waar kan ik je nog mee helpen?';
+  }
   if (/^(test|hallo+$|hey+$|hoi+$|ok|oké|ja|nee|hmm+|super|top)\.?$/.test(m)) {
     const variants = [
       'Ik ben er! 🚀 Stel me een vraag, zeg "zoek <onderwerp> op" of typ "help".',

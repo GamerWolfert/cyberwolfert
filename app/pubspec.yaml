@@ -1,7 +1,7 @@
 name: cyberwolfert_browser
 description: AeroSurf Browser met AeroSeek zoekmachine en AeroNova AI-assistent.
 publish_to: 'none'
-version: 2.7.0+34
+version: 2.8.0+35
 
 environment:
   sdk: '>=3.2.0 <4.0.0'
@@ -30,6 +30,8 @@ dependencies:
   # AI-antwoorden mooi weergeven (codeblokken, lijsten, vet)
   flutter_markdown: ^0.7.4
   flutter_local_notifications: 19.0.0
+  speech_to_text: ^7.5.0
+  flutter_tts: ^4.2.5
 
 dev_dependencies:
   flutter_test:
