@@ -6,6 +6,8 @@ import 'package:open_file/open_file.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'download_service.dart';
 import 'update_service.dart';
+import 'windows_update_stub.dart'
+    if (dart.library.io) 'windows_update.dart';
 
 /// Automatisch updaten:
 /// - Android: downloadt de nieuwe APK met voortgang, zet hem in de
@@ -48,16 +50,24 @@ class AutoUpdate {
       return true;
     }
 
-    if ((defaultTargetPlatform == TargetPlatform.windows ||
-            defaultTargetPlatform == TargetPlatform.linux) &&
-        context.mounted) {
+    // Windows: zip wordt gedownload, uitgepakt en de bestanden in de map van
+    // de huidige exe worden vervangen — geen nieuwe map, de exe vernieuwt zich.
+    if (defaultTargetPlatform == TargetPlatform.windows && context.mounted) {
+      final url = UpdateService.pickDownload(downloads);
+      if (url == null) return false;
+      return WindowsUpdate.install(
+          context, url, versie, (current['notes'] ?? '').toString());
+    }
+
+    if (defaultTargetPlatform == TargetPlatform.linux && context.mounted) {
       final url = UpdateService.pickDownload(downloads);
       if (url == null) return false;
       final doen = await showDialog<bool>(
         context: context,
         builder: (_) => AlertDialog(
           title: const Text('🚀 Update beschikbaar'),
-          content: Text('$versie is klaar.\n\n${current['notes'] ?? ''}\n\nDownload openen? (Daarna zip uitpakken en opnieuw starten.)'),
+          content: Text(
+              '$versie is klaar.\n\n${current['notes'] ?? ''}\n\nDownload openen? (Daarna zip uitpakken en opnieuw starten.)'),
           actions: [
             TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Later')),
             FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Downloaden')),

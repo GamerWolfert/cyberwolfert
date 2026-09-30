@@ -1,9 +1,9 @@
 {
     "app": "AeroSurf Browser",
-    "version": "2.6.2",
-    "build": 32,
+    "version": "2.6.3",
+    "build": 33,
     "minVersion": "1.0.0",
-    "notes": "Echt AeroSeek-logo op de startpagina; Server-URL instelbaar (handig bij een nieuwe tunnel-URL).",
+    "notes": "Windows: de app updated zichzelf — nieuwe bestanden komen automatisch in de map van de exe en de app herstart.",
     "updatedAt": "2026-09-30",
     "iosUrl": ""
 }
