@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../config/constants.dart';
 import '../providers/auth_provider.dart';
 
@@ -12,8 +13,57 @@ import '../providers/auth_provider.dart';
 class ApiService {
   static String? _active;
   static Future<bool>? _probe;
+  static const String _kCustom = 'server_base';
+  static const String _kLast = 'server_last';
 
   String get base => _active ?? AppConfig.baseUrl;
+
+  /// Handmatig ingevoerde server-URL (null = automatisch zoeken).
+  static Future<String?> customBase() async {
+    final p = await SharedPreferences.getInstance();
+    return p.getString(_kCustom);
+  }
+
+  /// URL opslaan (of wissen met null) en meteen opnieuw verbinden.
+  static Future<void> setCustomBase(String? url) async {
+    final p = await SharedPreferences.getInstance();
+    final v = _normBase(url);
+    if (v == null) {
+      await p.remove(_kCustom);
+    } else {
+      await p.setString(_kCustom, v);
+    }
+    _active = null;
+    _probe = null;
+    await ApiService().resolveBase(force: true);
+  }
+
+  static String? _normBase(String? u) {
+    if (u == null) return null;
+    var s = u.trim().replaceAll(RegExp(r'/+$'), '');
+    if (s.isEmpty) return null;
+    if (!s.startsWith('http')) s = 'https://$s';
+    return s.endsWith('/api') ? s : '$s/api';
+  }
+
+  /// Vraagt de backend welke externe tunnel nu actief is (alleen bereikbaar
+  /// via LAN, maar dat is precies waar de URL het eerst bekend is).
+  static Future<String?> _discoverTunnel() async {
+    try {
+      final r = await http
+          .get(
+              Uri.parse(
+                  'http://${AppConfig.miniPcIp}:${AppConfig.backendPort}/api/tunnel'),
+              headers: {'ngrok-skip-browser-warning': '1'})
+          .timeout(const Duration(seconds: 3));
+      if (r.statusCode == 200) {
+        final j = jsonDecode(r.body) as Map<String, dynamic>;
+        final u = _normBase((j['url'] ?? '').toString());
+        if (u != null) return u;
+      }
+    } catch (_) {}
+    return null;
+  }
 
   Future<bool> resolveBase({bool force = false}) {
     if (!force && _active != null) return Future.value(true);
@@ -23,11 +73,29 @@ class ApiService {
   }
 
   Future<bool> _doResolve() async {
-    final cands = AppConfig.candidates;
-    if (cands.isEmpty) return false;
-    final found = await _firstOk(cands);
+    final p = await SharedPreferences.getInstance();
+    final cands = <String>[];
+    final custom = _normBase(p.getString(_kCustom));
+    final last = _normBase(p.getString(_kLast));
+    if (custom != null) cands.add(custom);
+    if (last != null) cands.add(last);
+    cands.addAll(AppConfig.candidates);
+
+    var found = await _firstOk(cands.toSet().toList());
+    if (found == null) {
+      // Alleen nu de tunnel-URL opvragen (loopt naast de gewone race, dus
+      // geen extra vertraging als de LAN-ip gewoon bereikbaar is).
+      final t = await _discoverTunnel();
+      if (t != null) found = await _firstOk([t]);
+    } else {
+      unawaited(_discoverTunnel());
+    }
+
     if (found != null) {
       _active = found;
+      if (found != custom && found != AppConfig.baseUrl) {
+        await p.setString(_kLast, found);
+      }
       return true;
     }
     return _active != null;

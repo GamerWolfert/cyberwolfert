@@ -50,6 +50,15 @@ router.get('/version', (req, res) => {
   });
 });
 
+// Huidige externe tunnel-URL (wordt door tunnel-watch.sh weggeschreven).
+router.get('/tunnel', (req, res) => {
+  try {
+    res.type('json').send(fs.readFileSync(path.join(__dirname, '..', '..', 'tunnel.json'), 'utf8'));
+  } catch {
+    res.json({ url: null });
+  }
+});
+
 router.get('/update-check', (req, res) => {
   const v = loadVersion();
   const build = Number(req.query.build || 0);

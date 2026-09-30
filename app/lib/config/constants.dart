@@ -7,8 +7,12 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 class AppConfig {
   static const String miniPcIp = '192.168.1.42';
   static const int backendPort = 43711;
+
+  /// Huidige externe tunnel (Cloudflare quick tunnel; verandert bij herstart —
+  /// de app zoekt hem daarna automatisch via /api/tunnel of onthoudt de laatste
+  /// werkende URL, en Instellingen → Server-URL laat je hem handmatig invullen).
   static const String tunnelUrl =
-      'https://train-entrust-boozy.ngrok-free.dev/api';
+      'https://stanford-science-passenger-went.trycloudflare.com/api';
 
   static const String _override = String.fromEnvironment('API_BASE_URL', defaultValue: '');
 

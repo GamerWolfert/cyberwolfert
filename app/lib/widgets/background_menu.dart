@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../providers/settings_provider.dart';
+import '../services/api_service.dart';
 import '../services/sound_service.dart';
 
 /// Menu om achtergrond aan te passen (opgeslagen per gebruiker op de backend).
@@ -31,6 +32,7 @@ class BackgroundMenu extends StatefulWidget {
 class _BackgroundMenuState extends State<BackgroundMenu> {
   bool _uploading = false;
   bool _sound = true;
+  String? _server;
 
   @override
   void initState() {
@@ -38,6 +40,41 @@ class _BackgroundMenuState extends State<BackgroundMenu> {
     SoundService.enabled().then((v) {
       if (mounted) setState(() => _sound = v);
     });
+    ApiService.customBase().then((v) {
+      if (mounted) setState(() => _server = v);
+    });
+  }
+
+  /// Server-URL vastleggen (of wissen) — handig als de externe tunnel-URL
+  /// veranderd is: plak de nieuwe URL en de app praat er meteen mee.
+  Future<void> _editServerUrl() async {
+    final ctrl = TextEditingController(text: _server ?? '');
+    final res = await showDialog<String>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Server-URL'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Externe server',
+            hintText: 'https://xxxx.trycloudflare.com',
+            helperText:
+                'Leeg laten = automatisch (LAN, onthouden adres, gevonden tunnel).',
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c, ''), child: const Text('Automatisch')),
+          FilledButton(
+              onPressed: () => Navigator.pop(c, ctrl.text),
+              child: const Text('Opslaan')),
+        ],
+      ),
+    );
+    if (res == null) return;
+    await ApiService.setCustomBase(res.isEmpty ? null : res);
+    if (mounted) setState(() => _server = res.isEmpty ? null : res);
   }
 
   Future<void> _pickAndUpload(SettingsProvider s) async {
@@ -100,6 +137,19 @@ class _BackgroundMenuState extends State<BackgroundMenu> {
           trailing: s.backgroundValue == t ? const Icon(Icons.check) : null,
           onTap: () => s.update(type: 'theme', value: t),
         )),
+        const Divider(),
+        ListTile(
+          leading: const Icon(Icons.dns),
+          title: const Text('Server-URL'),
+          subtitle: Text(
+            _server ?? 'Automatisch (LAN + gevonden tunnel)',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 12),
+          ),
+          trailing: const Icon(Icons.edit),
+          onTap: _editServerUrl,
+        ),
         const Divider(),
         SwitchListTile(
           secondary: const Icon(Icons.volume_up),
