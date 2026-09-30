@@ -1,9 +1,9 @@
 {
     "app": "AeroSurf Browser",
-    "version": "2.6.3",
-    "build": 33,
+    "version": "2.7.0",
+    "build": 34,
     "minVersion": "1.0.0",
-    "notes": "Windows: de app updated zichzelf — nieuwe bestanden komen automatisch in de map van de exe en de app herstart.",
+    "notes": "Meldingsgeluiden: Discord-geluid bij berichten, mail en verzoeken (app én website), systeemmeldingen op Android en zelf kiezen welk geluid.",
     "updatedAt": "2026-09-30",
     "iosUrl": ""
 }

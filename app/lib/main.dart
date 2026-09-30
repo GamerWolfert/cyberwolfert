@@ -4,6 +4,7 @@ import 'config/constants.dart';
 import 'providers/settings_provider.dart';
 import 'providers/auth_provider.dart';
 import 'screens/browser_home.dart';
+import 'services/notify_service.dart';
 
 void main() {
   runApp(const CyberWolfertApp());
@@ -28,6 +29,8 @@ class _CyberWolfertAppState extends State<CyberWolfertApp> {
     // van de gast-laag geladen en lijkt hij bij elke herstart weg.
     auth.load().then((_) {
       if (mounted) settings.load();
+      // Meldingsgeluiden + systeemmeldingen (berichten, mail, verzoeken).
+      NotifyService.start();
     });
   }
 

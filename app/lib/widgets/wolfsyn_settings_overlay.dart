@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/auth_provider.dart';
 import '../providers/settings_provider.dart';
+import '../services/sound_service.dart';
 import '../services/wolfsyn_service.dart';
 
 /// Instellingen-overlay zoals Discord: links het navigatiemenu met
@@ -87,7 +89,7 @@ class _WolfSettingsState extends State<_WolfSettings> {
   }
 
   static const _toggleIds = [
-    'notif_sound', 'notif_vibrate', 'notif_push', 'notif_friends',
+    'notif_sound', 'notif_vibrate', 'notif_push', 'notif_friends', 'call_sound_on',
     'sys_start', 'sys_tray', 'sys_accel',
     'priv_log', 'priv_stats', 'priv_media',
     'perm_gifs', 'perm_preview', 'perm_files',
@@ -342,9 +344,15 @@ class _WolfSettingsState extends State<_WolfSettings> {
         return _simplePage('Meldingen', 'Kies wanneer AeroTalk je lastigvalt.', [
           _toggle('notif_sound', 'Berichtgeluid',
               'Speel een geluid af bij een nieuw bericht.', true),
+          _soundRow('notif', 'Berichtgeluid (geluid)',
+              'Standaard: Discord-melding. Eigen mp3 mag ook.'),
+          _toggle('call_sound_on', 'Belgeluid',
+              'Speel een geluid af bij een inkomend gesprek.', true),
+          _soundRow('call', 'Belgeluid (geluid)',
+              'Standaard: Discord-bel. Eigen mp3 mag ook.'),
           _toggle('notif_vibrate', 'Trillen', 'Vibratie bij binnenkomend bericht.', true),
           _toggle('notif_push', 'Pushmeldingen',
-              'Ook meldingen als de app op de achtergrond draait.', false),
+              'Ook meldingen als de app op de achtergrond draait.', true),
           _toggle('notif_friends', 'Alleen van vrienden',
               'Meldingen alleen tonen voor vriendschapsverzoeken en vrienden.', false),
         ]);
@@ -520,6 +528,120 @@ class _WolfSettingsState extends State<_WolfSettings> {
         const Divider(color: _cHover, height: 1),
       ],
     );
+  }
+
+  /// Rij waarmee je het meldings- of belgeluid wijzigt (standaard Discord,
+  /// eigen mp3, of testen).
+  Widget _soundRow(String kind, String title, String desc) {
+    return Column(
+      children: [
+        InkWell(
+          onTap: () => _soundSheet(kind, title),
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title,
+                          style: const TextStyle(
+                              color: _cText,
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 3),
+                      FutureBuilder<String>(
+                        future: SoundService.soundLabel(kind),
+                        builder: (_, s) => Text(
+                          s.data == null
+                              ? desc
+                              : '${s.data}  ·  tik om te wijzigen',
+                          style: const TextStyle(
+                              color: _cMuted, fontSize: 12.5),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                const Icon(Icons.music_note, color: _cBlue, size: 20),
+                const SizedBox(width: 6),
+                const Icon(Icons.chevron_right, color: _cMuted, size: 20),
+              ],
+            ),
+          ),
+        ),
+        const Divider(color: _cHover, height: 1),
+      ],
+    );
+  }
+
+  Future<void> _soundSheet(String kind, String title) async {
+    final label = await SoundService.soundLabel(kind);
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: _cRight,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(14))),
+      builder: (c) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
+              child: Text(title,
+                  style: const TextStyle(
+                      color: _cText,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700)),
+            ),
+            ListTile(
+              leading: const Icon(Icons.notifications_active, color: _cBlue),
+              title: const Text('Standaard (Discord)',
+                  style: TextStyle(color: _cText)),
+              subtitle: Text(label,
+                  style: const TextStyle(color: _cMuted, fontSize: 12.5)),
+              onTap: () async {
+                await SoundService.resetSound(kind);
+                if (c.mounted) Navigator.pop(c);
+                if (mounted) setState(() {});
+              },
+            ),
+            if (!kIsWeb)
+              ListTile(
+                leading: const Icon(Icons.upload_file, color: _cBlue),
+                title: const Text('Eigen geluid kiezen…',
+                    style: TextStyle(color: _cText)),
+                subtitle: const Text('Mp3 of ander audiobestand',
+                    style: TextStyle(color: _cMuted, fontSize: 12.5)),
+                onTap: () async {
+                  await SoundService.pickSound(kind);
+                  if (c.mounted) Navigator.pop(c);
+                  if (mounted) setState(() {});
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.play_arrow, color: _cBlue),
+              title: const Text('Test afspelen',
+                  style: TextStyle(color: _cText)),
+              onTap: () {
+                if (kind == 'call') {
+                  SoundService.playCall();
+                } else {
+                  SoundService.playNotif();
+                }
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (mounted) setState(() {});
   }
 
   Widget _infoRow(String k, String v) => Padding(
