@@ -1,9 +1,9 @@
 {
     "app": "AeroSurf Browser",
-    "version": "2.8.0",
-    "build": 35,
+    "version": "2.8.1",
+    "build": 36,
     "minVersion": "1.0.0",
-    "notes": "Hey Nova: zeg 'Hey Nova' of 'Oke Nova' en stel je vraag (antwoord in beeld én uitgesproken). AeroTalk als Discord: server-tags, categorieën en eigen kanaalnamen; AeroNova tussen de zoekresultaten; officieel AeroSurf-mailontwerp.",
+    "notes": "Hey Nova: zeg 'Hey Nova' of 'Oke Nova' en stel je vraag (antwoord in beeld én uitgesproken). AeroTalk als Discord: server-tags, categorieen en eigen kanaalnamen; AeroNova tussen de zoekresultaten; officieel AeroSurf-mailontwerp.",
     "updatedAt": "2026-10-01",
     "iosUrl": ""
 }
