@@ -9,7 +9,20 @@ class BackgroundMenu extends StatefulWidget {
   const BackgroundMenu({super.key});
 
   static const presetColors = ['#050805', '#1A1A2E', '#16213E', '#0F3460', '#3CFF5C', '#2A9D8F'];
-  static const presetThemes = ['wolf-dark', 'pulse-red', 'midnight'];
+  static const presetThemes = ['aerosurf', 'wolf-dark', 'pulse-red', 'midnight'];
+
+  static String themeLabel(String t) {
+    switch (t) {
+      case 'aerosurf':
+        return 'AeroSurf (groen kosmisch)';
+      case 'wolf-dark':
+        return 'Diep nachtblauw';
+      case 'pulse-red':
+        return 'Pulse rood';
+      default:
+        return 'Midnight';
+    }
+  }
 
   @override
   State<BackgroundMenu> createState() => _BackgroundMenuState();
@@ -82,7 +95,8 @@ class _BackgroundMenuState extends State<BackgroundMenu> {
         const Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: Text("Thema's")),
         ...BackgroundMenu.presetThemes.map((t) => ListTile(
           leading: const Icon(Icons.palette),
-          title: Text(t),
+          title: Text(BackgroundMenu.themeLabel(t)),
+          subtitle: Text(t, style: const TextStyle(fontSize: 11)),
           trailing: s.backgroundValue == t ? const Icon(Icons.check) : null,
           onTap: () => s.update(type: 'theme', value: t),
         )),

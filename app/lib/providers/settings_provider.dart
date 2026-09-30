@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import '../widgets/startpage/night_scape.dart';
 
 /// Globale UI-state: thema + achtergrond, gesynchroniseerd met backend (per gebruiker).
 class SettingsProvider extends ChangeNotifier {
@@ -49,13 +50,16 @@ class SettingsProvider extends ChangeNotifier {
           errorBuilder: (_, __, ___) => Container(color: _hex('#050805')));
     } else if (backgroundType == 'theme') {
       bg = Container(decoration: BoxDecoration(gradient: themeGradient(backgroundValue)));
+    } else if (backgroundValue.replaceAll(' ', '').toUpperCase() == '#050805') {
+      // Standaard: geschilderd groen kosmisch landschap (AeroSurf-look).
+      bg = const NightScape(child: SizedBox.expand());
     } else {
       bg = Container(color: _hex(backgroundValue));
     }
     return Stack(fit: StackFit.expand, children: [Positioned.fill(child: bg), child]);
   }
 
-  /// Thema-presets als echte gradients (wolf-night, pulse-red, midnight...).
+  /// Thema-presets als echte gradients (aero-groen, nachtblauw, pulse-rood...).
   static LinearGradient themeGradient(String name) {
     switch (name) {
       case 'pulse-red':
@@ -67,10 +71,14 @@ class SettingsProvider extends ChangeNotifier {
           begin: Alignment.topCenter, end: Alignment.bottomCenter,
           colors: [Color(0xFF101A33), Color(0xFF070B18), Color(0xFF03040A)]);
       case 'wolf-dark':
-      default:
         return const LinearGradient(
           begin: Alignment.topCenter, end: Alignment.bottomCenter,
           colors: [Color(0xFF0B1E42), Color(0xFF071026), Color(0xFF040912)]);
+      case 'aerosurf':
+      default:
+        return const LinearGradient(
+          begin: Alignment.topCenter, end: Alignment.bottomCenter,
+          colors: [Color(0xFF0B2E16), Color(0xFF061409), Color(0xFF030705)]);
     }
   }
 

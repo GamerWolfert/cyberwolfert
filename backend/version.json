@@ -1,9 +1,9 @@
 {
     "app": "AeroSurf Browser",
-    "version": "2.6.0",
-    "build": 30,
+    "version": "2.6.1",
+    "build": 31,
     "minVersion": "1.0.0",
-    "notes": "AeroSurf-overal: nieuw logo en icoon, neon-groene look, AeroSeek-zoekbalk met ingebouwde-app-tegels (AeroNova AI, AeroTalk, Mail, Downloads, Instellingen).",
+    "notes": "AeroSurf-groene achtergrond standaard, AeroSeek-logo op de startpagina, snellere downloads via GitHub-releases.",
     "updatedAt": "2026-09-30",
     "iosUrl": ""
 }
