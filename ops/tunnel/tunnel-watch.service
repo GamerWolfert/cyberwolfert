@@ -1,0 +1,12 @@
+[Unit]
+Description=AeroSurf tunnel-URL publicatie (leest journal cloudflared)
+After=cloudflared-quick.service
+Requires=cloudflared-quick.service
+
+[Service]
+ExecStart=/bin/bash /home/wolfert/cyberwolfert/tunnel-watch.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

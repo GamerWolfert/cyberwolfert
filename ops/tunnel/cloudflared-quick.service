@@ -1,0 +1,13 @@
+[Unit]
+Description=AeroSurf Cloudflare quick tunnel (poort 43711)
+After=network-online.target cyberwolfert-backend.service
+Wants=network-online.target
+
+[Service]
+User=wolfert
+ExecStart=/usr/local/bin/cloudflared tunnel --url http://127.0.0.1:43711 --no-autoupdate
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
