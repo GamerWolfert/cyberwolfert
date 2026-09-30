@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart'
     show kIsWeb, defaultTargetPlatform;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:open_file/open_file.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'download_service.dart';
@@ -115,9 +116,55 @@ class AutoUpdate {
   }
 
   /// Oude installatie met de debug-tekening: de release-getekende APK gaat er
-  /// niet overheen ("App niet geïnstalleerd"). Daarom downloaden naar de
-  /// Downloadmap (blijft bewaard), app verwijderen, dan pas installeren.
+  /// niet overheen ("App niet geïnstalleerd"). De APK gaat daarom via de
+  /// DownloadManager naar de publieke Downloadmap (blijft bewaard als de app
+  /// wordt verwijderd), waarna Android de verwijder-vraag opent.
+  static const MethodChannel _updater = MethodChannel('cyberwolfert/updater');
+
   static Future<void> _handmatigeUpdate(BuildContext context, String url,
+      String versie, Map<String, dynamic> current) async {
+    await showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('📲 Update = één keer opnieuw installeren'),
+        content: Text(
+            '$versie is klaar.\n\n${current['notes'] ?? ''}\n\n'
+            'Je huidige installatie heeft een andere tekening dan de nieuwe APK. '
+            'Met de knop hieronder regelen we dat in één keer:\n\n'
+            '1. De APK wordt naar je Downloadmap gedownload (blijft bewaard).\n'
+            '2. Android vraagt of CyberWolfert verwijderd mag worden → tik op Verwijderen.\n'
+            '3. Tik op de melding "Download voltooid" en installeer.\n\n'
+            'Waarschuwt Play Protect? Tik op Details → Toch installeren. '
+            'Daarna updaten normaal vanuit de app.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Later')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Update nu uitvoeren')),
+        ],
+      ),
+    );
+    if (!context.mounted) return;
+    try {
+      await _updater.invokeMethod('downloadApk', {'url': url});
+      await Future.delayed(const Duration(milliseconds: 1500));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Download gestart — bevestig het verwijderen en tik '
+                'daarna op de melding om te installeren.')));
+      }
+      await _updater.invokeMethod('uninstallSelf');
+    } catch (_) {
+      if (!context.mounted) return;
+      await _handmatigDownloaden(context, url, versie, current);
+    }
+  }
+
+  /// Back-up als het kanaal naar Android niet beschikbaar is: APK via de
+  /// browser downloaden (komt ook in de Downloadmap) met stappen erbij.
+  static Future<void> _handmatigDownloaden(BuildContext context, String url,
       String versie, Map<String, dynamic> current) async {
     await showDialog(
       context: context,
@@ -125,14 +172,10 @@ class AutoUpdate {
         title: const Text('📲 Update = opnieuw installeren'),
         content: Text(
             '$versie is klaar.\n\n${current['notes'] ?? ''}\n\n'
-            'Je huidige installatie heeft een andere tekening dan de nieuwe APK, dus '
-            'Android zegt "App niet geïnstalleerd". Volg deze drie stappen:\n\n'
-            '1. Tik op "Nieuwe APK downloaden" — het bestand komt in je Downloadmap en '
-            'blijft daar bewaard, ook als je de app verwijdert.\n'
-            '2. Verwijder daarna deze app (lang drukken op het pictogram → Verwijderen).\n'
-            '3. Open het gedownloade bestand in je Downloadmap en installeer het.\n\n'
-            'Waarschuwt Play Protect? Tik op Details → Toch installeren. '
-            'Na deze ene keer updaten normaal via de app.'),
+            '1. Tik op "Nieuwe APK downloaden" (het bestand komt in je Downloadmap).\n'
+            '2. Verwijder deze app (lang drukken op het pictogram → Verwijderen).\n'
+            '3. Open het gedownloade bestand en installeer.\n\n'
+            'Play Protect waarschuwt? Tik op Details → Toch installeren.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context),

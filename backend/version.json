@@ -1,9 +1,9 @@
 {
     "app": "CyberWolfert Browser",
-    "version": "2.5.4",
-    "build": 28,
+    "version": "2.5.5",
+    "build": 29,
     "minVersion": "1.0.0",
-    "notes": "Updatevenster legt nu uit dat een oude installatie eerst verwijderd moet worden (nieuwe tekening), met directe APK-download; daarna updaten normaal.",
+    "notes": "Updateknop regelt een tekening-wijziging voortaan in de app zelf: APK naar de Downloadmap, verwijderverzoek, en daarna installeren. Verder WolfSyn-pariteit en Gmail-relais.",
     "updatedAt": "2026-09-29",
     "iosUrl": ""
 }
