@@ -9,7 +9,7 @@ void main() {
   runApp(const CyberWolfertApp());
 }
 
-/// Root van de CyberWolfert Browser.
+/// Root van de AeroSurf Browser.
 class CyberWolfertApp extends StatefulWidget {
   const CyberWolfertApp({super.key});
 
@@ -52,7 +52,7 @@ class _CyberWolfertAppState extends State<CyberWolfertApp> {
           themeMode: s.theme == 'light' ? ThemeMode.light : ThemeMode.dark,
           theme: ThemeData(useMaterial3: true, colorSchemeSeed: s.accent),
           darkTheme: ThemeData.dark(useMaterial3: true).copyWith(
-            scaffoldBackgroundColor: const Color(0xFF0B1020),
+            scaffoldBackgroundColor: const Color(0xFF050805),
             colorScheme: ColorScheme.fromSeed(
                 seedColor: s.accent, brightness: Brightness.dark),
           ),

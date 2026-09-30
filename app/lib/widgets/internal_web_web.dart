@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:web/web.dart' as web;
 import 'dart:ui_web' as ui_web;
 
-/// Iframe-blad voor Web: pagina's BINNEN CyberWolfert (met eigen navigatiestack).
+/// Iframe-blad voor Web: pagina's BINNEN AeroSurf (met eigen navigatiestack).
 class InternalWebFrame extends StatefulWidget {
   final String url;
   const InternalWebFrame({super.key, required this.url});

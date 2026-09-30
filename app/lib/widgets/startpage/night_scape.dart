@@ -23,7 +23,7 @@ class _NightPainter extends CustomPainter {
     final sky = LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
-      colors: const [Color(0xFF0C2148), Color(0xFF071026), Color(0xFF040912)],
+      colors: const [Color(0xFF0B2E16), Color(0xFF061409), Color(0xFF030705)],
     ).createShader(Rect.fromLTWH(0, 0, w, h));
     canvas.drawRect(Rect.fromLTWH(0, 0, w, h), Paint()..shader = sky);
 
@@ -40,15 +40,15 @@ class _NightPainter extends CustomPainter {
     final moon = Offset(w * 0.78, h * 0.16);
     final mr = min(w, h) * 0.055;
     canvas.drawCircle(moon, mr * 2.6,
-        Paint()..color = const Color(0xFF9FD8FF).withValues(alpha: 0.10));
+        Paint()..color = const Color(0xFF9DFFC0).withValues(alpha: 0.10));
     canvas.drawCircle(moon, mr * 1.6,
-        Paint()..color = const Color(0xFF9FD8FF).withValues(alpha: 0.16));
-    canvas.drawCircle(moon, mr, Paint()..color = const Color(0xFFE8F4FF));
+        Paint()..color = const Color(0xFF9DFFC0).withValues(alpha: 0.16));
+    canvas.drawCircle(moon, mr, Paint()..color = const Color(0xFFE6FFF0));
     canvas.drawCircle(moon + Offset(-mr * 0.25, -mr * 0.15), mr * 0.82,
-        Paint()..color = const Color(0xFF0C2148).withValues(alpha: 0.12));
+        Paint()..color = const Color(0xFF0B2E16).withValues(alpha: 0.12));
 
-    _ridge(canvas, w, h, 0.52, 0.10, const Color(0xFF0E2450), 7);
-    _ridge(canvas, w, h, 0.62, 0.13, const Color(0xFF081433), 11);
+    _ridge(canvas, w, h, 0.52, 0.10, const Color(0xFF0E2A16), 7);
+    _ridge(canvas, w, h, 0.62, 0.13, const Color(0xFF08190D), 11);
     _pines(canvas, w, h, 0.62);
 
     final lakeTop = h * 0.74;
@@ -58,7 +58,7 @@ class _NightPainter extends CustomPainter {
         ..shader = const LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFF0D2653), Color(0xFF03060F)],
+          colors: [Color(0xFF0D2A16), Color(0xFF030604)],
         ).createShader(Rect.fromLTWH(0, lakeTop, w, h - lakeTop)),
     );
     final streakX = moon.dx;
@@ -67,12 +67,12 @@ class _NightPainter extends CustomPainter {
       final ww = mr * (0.5 + (i / 14) * 1.6) * (0.8 + Random(i).nextDouble() * 0.4);
       canvas.drawRRect(
         RRect.fromLTRBR(streakX - ww, y, streakX + ww, y + 2.2, const Radius.circular(2)),
-        Paint()..color = const Color(0xFFBFE6FF).withValues(alpha: 0.28 - i * 0.016),
+        Paint()..color = const Color(0xFFC6FFDD).withValues(alpha: 0.28 - i * 0.016),
       );
     }
     canvas.drawOval(
       Rect.fromCenter(center: Offset(w * 0.3, h * 0.70), width: w * 0.5, height: 26),
-      Paint()..color = const Color(0xFF9FD8FF).withValues(alpha: 0.07),
+      Paint()..color = const Color(0xFF9DFFC0).withValues(alpha: 0.07),
     );
   }
 
@@ -94,7 +94,7 @@ class _NightPainter extends CustomPainter {
 
   void _pines(Canvas canvas, double w, double h, double baseY) {
     final rnd = Random(99);
-    final paint = Paint()..color = const Color(0xFF040A1C);
+    final paint = Paint()..color = const Color(0xFF04100A);
     for (var i = 0; i < 26; i++) {
       final x = rnd.nextDouble() * w;
       final th = 26 + rnd.nextDouble() * 60;

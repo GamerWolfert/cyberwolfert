@@ -9,7 +9,7 @@ function loadVersion() {
   try {
     return JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'version.json'), 'utf8'));
   } catch {
-    return { app: 'CyberWolfert Browser', version: '0.0.0', build: 0 };
+    return { app: 'AeroSurf Browser', version: '0.0.0', build: 0 };
   }
 }
 
@@ -24,18 +24,28 @@ function publicBase(req) {
   return `${req.protocol}://${req.get('host')}`;
 }
 
+// Bestanden staan ook op GitHub-releases; die gebruiken we bij voorkeur
+// (een download via ngrok verbruikt de maandelijkse bandbreedte-limit).
+const GITHUB_RELEASE = 'https://github.com/GamerWolfert/cyberwolfert/releases/download';
+
+function releaseAsset(v, name) {
+  return `${GITHUB_RELEASE}/v${v.version}/${name}`;
+}
+
 router.get('/version', (req, res) => {
   const v = loadVersion();
-  const base = publicBase(req);
   const dir = downloadDir();
   const has = (f) => fs.existsSync(path.join(dir, f));
+  const local = (f) => `${publicBase(req)}/downloads/${f}`;
   res.json({
     ...v,
     downloads: {
-      apk: has('CyberWolfert.apk') ? `${base}/downloads/CyberWolfert.apk` : null,
-      windows: has('CyberWolfert-Windows.zip') ? `${base}/downloads/CyberWolfert-Windows.zip` : null,
+      apk: releaseAsset(v, 'AeroSurf.apk'),
+      windows: releaseAsset(v, 'AeroSurf-Windows.zip'),
       ios: v.iosUrl || null,
-      bundle: has('CyberWolfert-apps.zip') ? `${base}/downloads/CyberWolfert-apps.zip` : null,
+      bundle: releaseAsset(v, 'AeroSurf-apps.zip'),
+      apkLocal: has('AeroSurf.apk') ? local('AeroSurf.apk') : null,
+      bundleLocal: has('AeroSurf-apps.zip') ? local('AeroSurf-apps.zip') : null,
     },
   });
 });

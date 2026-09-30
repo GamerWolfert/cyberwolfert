@@ -119,7 +119,7 @@ class _QuickLinksPanelState extends State<QuickLinksPanel> {
                     BrandIcon(link: l, size: 20),
                     const SizedBox(width: 10),
                     Expanded(child: Text(l.naam)),
-                    const Icon(Icons.arrow_forward, size: 16, color: Color(0xFF29B6F6)),
+                    const Icon(Icons.arrow_forward, size: 16, color: Color(0xFF3CFF5C)),
                   ]),
                 ),
               )),
@@ -149,10 +149,10 @@ class QuickTiles extends StatelessWidget {
                   width: 86,
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0A1428).withValues(alpha: 0.78),
+                    color: const Color(0xFF0A120A).withValues(alpha: 0.78),
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
-                        color: const Color(0xFF29B6F6).withValues(alpha: 0.25)),
+                        color: const Color(0xFF3CFF5C).withValues(alpha: 0.25)),
                   ),
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
                     BrandIcon(link: l, size: 28),

@@ -1,4 +1,4 @@
-// Account-routes: eigen CyberWolfert-account + Google-login.
+// Account-routes: eigen AeroSurf-account + Google-login.
 // - Registreren vereist gebruikersnaam + e-mail + wachtwoord; welkomstmail met
 //   bevestigingslink + "dit was ik niet"-link (logout overal + apparaat-ban).
 // - Inloggen met gebruikersnaam OF e-mailadres + wachtwoord (+ optioneel apparaat).
@@ -109,7 +109,7 @@ router.get('/verify', async (req, res) => {
     const r = await db.query('SELECT * FROM users WHERE email_token=$1', [req.query.token || '']);
     if (!r.rows.length) return res.status(400).send('<h1>Ongeldige of verlopen link.</h1>');
     await db.query('UPDATE users SET email_verified=true, email_token=NULL WHERE id=$1', [r.rows[0].id]);
-    res.send('<h1 style="font-family:sans-serif">🐺 E-mailadres bevestigd! Je kunt nu inloggen in CyberWolfert.</h1>');
+    res.send('<h1 style="font-family:sans-serif">🚀 E-mailadres bevestigd! Je kunt nu inloggen in AeroSurf.</h1>');
   } catch (e) {
     res.status(500).send('<h1>Er ging iets mis.</h1>');
   }
@@ -155,7 +155,7 @@ router.get('/unban', async (req, res) => {
     await db.query('UPDATE devices SET banned=false WHERE user_id=$1', [user.id]);
     await db.query('UPDATE users SET email_token=NULL WHERE id=$1', [user.id]);
     await mails.apparaatGedeblokkeerd(user.email, user.display_name || user.username);
-    res.send('<h1 style="font-family:sans-serif">🐺 Apparaat gedeblokkeerd. Je kunt weer inloggen.</h1>');
+    res.send('<h1 style="font-family:sans-serif">🚀 Apparaat gedeblokkeerd. Je kunt weer inloggen.</h1>');
   } catch (e) {
     res.status(500).send('<h1>Er ging iets mis.</h1>');
   }

@@ -207,9 +207,9 @@ router.post('/mail/test', requirePerm('mail.test'), async (req, res) => {
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) {
     return res.status(400).json({ error: 'geldig e-mailadres nodig' });
   }
-  const out = await sendMail(to, 'CyberWolfert — testmail', brief({
+  const out = await sendMail(to, 'AeroSurf — testmail', brief({
     titel: 'Testmail geslaagd',
-    intro: 'Dit is een testmail vanuit het CyberWolfert admin-paneel.',
+    intro: 'Dit is een testmail vanuit het AeroSurf admin-paneel.',
     bodyHtml: '<p>Als je dit levert, werkt de SMTP-relay.</p>',
   }));
   res.json(out);
@@ -302,7 +302,7 @@ router.get('/logs/logins', requirePerm('logs.logins'), async (req, res) => {
   res.json(r.rows);
 });
 
-// Verwijderde/verdwenen WolfSyn-berichten (berichten zelf zijn weg, log blijft).
+// Verwijderde/verdwenen AeroTalk-berichten (berichten zelf zijn weg, log blijft).
 router.get('/logs/wolfsyn', requirePerm('wolf.servers'), async (req, res) => {
   const limit = Math.min(Number(req.query.limit || 50), 200);
   const r = await db.query(

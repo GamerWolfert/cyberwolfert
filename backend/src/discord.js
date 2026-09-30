@@ -64,7 +64,7 @@ const log = {
   error: (waar, wat) =>
     send(CHANNELS.cwErrors, `⚠️ \`${stamp()}\` **${waar}**: ${String(wat).slice(0, 1500)}`),
   update: (versie, notes) =>
-    send(CHANNELS.appsUpdates, `📱 \`${stamp()}\` **CyberWolfert ${versie}** gepubliceerd: ${notes}`.slice(0, 1900)),
+    send(CHANNELS.appsUpdates, `📱 \`${stamp()}\` **AeroSurf ${versie}** gepubliceerd: ${notes}`.slice(0, 1900)),
   wolfsyn: (msg) =>
     send(CHANNELS.wolfsyn, `🗑️ \`${stamp()}\` ${String(msg).slice(0, 1800)}`),
 };

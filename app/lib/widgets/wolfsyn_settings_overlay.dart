@@ -339,7 +339,7 @@ class _WolfSettingsState extends State<_WolfSettings> {
       case 'account':
         return _accountPage();
       case 'notif':
-        return _simplePage('Meldingen', 'Kies wanneer WolfSyn je lastigvalt.', [
+        return _simplePage('Meldingen', 'Kies wanneer AeroTalk je lastigvalt.', [
           _toggle('notif_sound', 'Berichtgeluid',
               'Speel een geluid af bij een nieuw bericht.', true),
           _toggle('notif_vibrate', 'Trillen', 'Vibratie bij binnenkomend bericht.', true),
@@ -352,7 +352,7 @@ class _WolfSettingsState extends State<_WolfSettings> {
         return _displayPage();
       case 'system':
         return _simplePage('Systeem', 'Algemene instellingen van de app.', [
-          _toggle('sys_start', 'CyberWolfert automatisch openen',
+          _toggle('sys_start', 'AeroSurf automatisch openen',
               'Start de app zodra je de computer opstart.', false),
           _toggle('sys_tray', 'Minimaliseren naar systeembalk',
               'Door op X te klikken wordt de app geminimaliseerd in plaats van afgesloten.', true),
@@ -372,7 +372,7 @@ class _WolfSettingsState extends State<_WolfSettings> {
           _toggle('priv_log', 'Lokale logboeken',
               'Bewaar een log van foutmeldingen op dit apparaat.', true),
           _toggle('priv_stats', 'Anonieme statistieken',
-              'Helpt om WolfSyn te verbeteren — zonder je berichten.', false),
+              'Helpt om AeroTalk te verbeteren — zonder je berichten.', false),
           _toggle('priv_media', 'Media automatisch laden',
               'Afbeeldingen en GIF’s direct tonen in chats.', true),
         ]);
@@ -386,13 +386,13 @@ class _WolfSettingsState extends State<_WolfSettings> {
               'Ontvang bestanden van alle leden (anders alleen vrienden).', false),
         ]);
       case 'a11y':
-        return _simplePage('Toegankelijkheid', 'Maak WolfSyn comfortabeler.', [
+        return _simplePage('Toegankelijkheid', 'Maak AeroTalk comfortabeler.', [
           _toggle('a11y_text', 'Grotere tekst', 'Vergroot de tekst in chats.', false),
           _toggle('a11y_motion', 'Minder beweging', 'Schakel overbodige animaties uit.', false),
           _toggle('a11y_contrast', 'Hoger contrast', 'Duidelijkere kleuren en randen.', false),
         ]);
       case 'lang':
-        return _simplePage('Taal en tijd', 'Hoe WolfSyn zich uitdrukt.', [
+        return _simplePage('Taal en tijd', 'Hoe AeroTalk zich uitdrukt.', [
           _infoRow('Taal', 'Nederlands'),
           _infoRow('Tijdzone', 'Europe/Amsterdam (UTC+02:00)'),
           _infoRow('Datumformaat', 'dd-mm-jjjj'),
@@ -423,12 +423,12 @@ class _WolfSettingsState extends State<_WolfSettings> {
   Widget _pageUnter(String id) {
     final n = _nav.firstWhere((x) => x.id == id);
     final soon = <String, String>{
-      'nitro': 'Nitro is het betaalde lidmaatschap van WolfSyn — binnenkort beschikbaar.',
+      'nitro': 'Nitro is het betaalde lidmaatschap van AeroTalk — binnenkort beschikbaar.',
       'boost': 'Boost je favoriete servers zodra boosts live gaan. Je boost telt nu al mee.',
       'subs': 'Abonnementen verschijnen hier zodra er iets te abonneren valt.',
       'gifts': 'Cadeau-inventaris: hier belanden cadeaus die je krijgt of geeft.',
       'billing': 'Facturatie en betaalmethodes worden hier beheerd.',
-      'games': 'WolfSyn ziet straks welke games je speelt — koppel je accounts in de browser.',
+      'games': 'AeroTalk ziet straks welke games je speelt — koppel je accounts in de browser.',
       'activity': 'Bepaal wie je activiteit mag zien.',
       'overlay': 'De game-overlay toont chats bovenop je game.',
       'apps': 'Gekoppelde apps en integraties staan hier.',
@@ -556,13 +556,13 @@ class _WolfSettingsState extends State<_WolfSettings> {
       ['light', 'Licht'],
       ['system', 'Systeem'],
     ];
-    final accents = ['#E63946', '#5865F2', '#29B6F6', '#43B581', '#FAA61A', '#EB459E'];
+    final accents = ['#3CFF5C', '#5865F2', '#3CFF5C', '#43B581', '#FAA61A', '#EB459E'];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _H('Weergave'),
         const SizedBox(height: 4),
-        const Text('Hoe WolfSyn eruitziet.',
+        const Text('Hoe AeroTalk eruitziet.',
             style: TextStyle(color: _cMuted, fontSize: 13.5)),
         const SizedBox(height: 20),
         const Text('Thema',
@@ -704,7 +704,7 @@ class _WolfSettingsState extends State<_WolfSettings> {
         TextField(
           controller: naam,
           style: const TextStyle(color: _cText),
-          decoration: _inp('WolfSyn-naam'),
+          decoration: _inp('AeroTalk-naam'),
         ),
         const SizedBox(height: 12),
         TextField(
@@ -836,7 +836,7 @@ class _WolfSettingsState extends State<_WolfSettings> {
       builder: (ctx) => AlertDialog(
         backgroundColor: _cRight,
         title: const Text('Afmelden?', style: TextStyle(color: Colors.white)),
-        content: const Text('Je moet daarna opnieuw inloggen om WolfSyn te gebruiken.',
+        content: const Text('Je moet daarna opnieuw inloggen om AeroTalk te gebruiken.',
             style: TextStyle(color: _cText)),
         actions: [
           TextButton(

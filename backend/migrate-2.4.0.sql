@@ -1,4 +1,4 @@
--- Migratie naar 2.4.0 (idempotent): WolfSyn als Discord — server-tags,
+-- Migratie naar 2.4.0 (idempotent): AeroTalk als Discord — server-tags,
 -- vrienden, groeps-DM's en (gratis) server-boosts.
 
 -- Server-tag: kiezen bij joinen, verschijnt achter je naam in die server.
@@ -58,4 +58,4 @@ CREATE TABLE IF NOT EXISTS ws_boosts (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (server_id, user_id)
 );
-ALTER TABLE ws_servers ADD COLUMN IF NOT EXISTS banner_color VARCHAR(16) DEFAULT '#29B6F6';
+ALTER TABLE ws_servers ADD COLUMN IF NOT EXISTS banner_color VARCHAR(16) DEFAULT '#3CFF5C';

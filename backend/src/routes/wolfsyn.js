@@ -1,7 +1,7 @@
-// WolfSyn: Discord-achtige community, volledig geïntegreerd met browser-accounts.
+// AeroTalk: Discord-achtige community, volledig geïntegreerd met browser-accounts.
 // - Servers (groepen) maken + joinen via uitnodigingscode
 // - Rollen met rechten (beheren/kicken), kanalen, berichten (polling)
-// - DM's tussen gebruikers, eigen WolfSyn-profiel (naam/foto/bio)
+// - DM's tussen gebruikers, eigen AeroTalk-profiel (naam/foto/bio)
 // Alles vereist login (gast -> app stuurt naar browser-login).
 const express = require('express');
 const crypto = require('crypto');
@@ -53,7 +53,7 @@ function esc(s) {
   return String(s || '').slice(0, 2000);
 }
 
-// --- Verdwijnende berichten (WolfSyn) ---
+// --- Verdwijnende berichten (AeroTalk) ---
 async function isAdminUser(uid) {
   try {
     const r = await db.query('SELECT is_admin FROM users WHERE id=$1', [uid]);
@@ -122,7 +122,7 @@ async function purgeMessage(row, kind, refId, reason, byUid) {
     if (reason !== 'expire') {
       const wie = byUid ? `door \`user#${byUid}\`` : 'automatisch';
       log.wolfsyn(
-        `**WolfSyn bericht verwijderd** (${wie}) in kanaal #${refId}: ` +
+        `**AeroTalk bericht verwijderd** (${wie}) in kanaal #${refId}: ` +
           String(row.body || '').replace(/\n/g, ' ').slice(0, 300)
       );
     }
@@ -144,7 +144,7 @@ async function purgeDm(row, reason, byUid) {
     if (reason !== 'expire') {
       const wie = byUid ? `door \`user#${byUid}\`` : 'automatisch';
       log.wolfsyn(
-        `**WolfSyn DM verwijderd** (${wie}) user#${row.from_id} -> user#${row.to_id}: ` +
+        `**AeroTalk DM verwijderd** (${wie}) user#${row.from_id} -> user#${row.to_id}: ` +
           String(row.body || '').replace(/\n/g, ' ').slice(0, 300)
       );
     }
@@ -200,7 +200,7 @@ router.post('/servers', async (req, res) => {
   );
   const server = s.rows[0];
   await db.query(
-    "INSERT INTO ws_roles (server_id, name, color, can_manage, can_kick, position) VALUES ($1,'Baas','#E63946',true,true,0)",
+    "INSERT INTO ws_roles (server_id, name, color, can_manage, can_kick, position) VALUES ($1,'Baas','#3CFF5C',true,true,0)",
     [server.id]
   );
   await db.query('INSERT INTO ws_channels (server_id, name, position) VALUES ($1,$2,0)', [server.id, 'algemeen']);
@@ -258,7 +258,7 @@ router.post('/servers/:id/boost', async (req, res) => {
   const level = boostLevel(boosts);
   await db.query('UPDATE ws_servers SET banner_color=$2 WHERE id=$1', [
     sid,
-    ['#E63946', '#29B6F6', '#F4B400'][level],
+    ['#3CFF5C', '#3CFF5C', '#F4B400'][level],
   ]);
   res.json({ ok: true, boosts, level, mine: !has.rows.length });
 });
@@ -312,7 +312,7 @@ router.post('/servers/:id/roles', async (req, res) => {
   const { name, color, can_manage, can_kick } = req.body || {};
   const r = await db.query(
     'INSERT INTO ws_roles (server_id, name, color, can_manage, can_kick, position) VALUES ($1,$2,$3,$4,$5,1) RETURNING *',
-    [req.params.id, esc(name || 'Nieuw').slice(0, 32), String(color || '#29B6F6').slice(0, 16), !!can_manage, !!can_kick]
+    [req.params.id, esc(name || 'Nieuw').slice(0, 32), String(color || '#3CFF5C').slice(0, 16), !!can_manage, !!can_kick]
   );
   res.json(r.rows[0]);
 });
@@ -647,7 +647,7 @@ async function purgeGroupMessage(row, reason, byUid) {
     if (reason !== 'expire') {
       const wie = byUid ? `door \`user#${byUid}\`` : 'automatisch';
       log.wolfsyn(
-        `**WolfSyn groepsbericht verwijderd** (${wie}) groep #${row.group_id}: ` +
+        `**AeroTalk groepsbericht verwijderd** (${wie}) groep #${row.group_id}: ` +
           String(row.body || '').replace(/\n/g, ' ').slice(0, 300)
       );
     }
@@ -752,7 +752,7 @@ router.post('/groups/:id/leave', async (req, res) => {
   res.json({ ok: true });
 });
 
-// --- Eigen WolfSyn-profiel (los van browser-loginnaam) ---
+// --- Eigen AeroTalk-profiel (los van browser-loginnaam) ---
 router.get('/profile', async (req, res) => {
   const r = await db.query(
     `SELECT u.id, u.username, COALESCE(p.display_name, u.display_name, u.username) AS display,

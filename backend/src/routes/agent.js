@@ -51,7 +51,7 @@ function fetchTimeout(url, opts = {}, ms) {
 }
 
 function plannerPrompt(goal) {
-  return `Je bent de plan-module van de CyberWolfert-agent op een Fedora Mini-PC.
+  return `Je bent de plan-module van de AeroSurf-agent op een Fedora Mini-PC.
 De gebruiker geeft straks toestemming; jij levert alleen een plan.
 
 Antwoord ALLEEN met geldige JSON (geen tekst eromheen, geen uitleg):

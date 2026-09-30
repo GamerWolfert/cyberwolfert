@@ -106,7 +106,7 @@ if (fs.existsSync(webDir)) {
     if (req.method !== 'GET' || req.path.includes('.')) return next();
     res.sendFile(path.join(webDir, 'index.html'));
   });
-  console.log('[CyberWolfert] host Flutter-web uit ./public (via internet te openen via tunnel)');
+  console.log('[AeroSurf] host Flutter-web uit ./public (via internet te openen via tunnel)');
 }
 
 app.use((err, req, res, next) => {
@@ -158,7 +158,7 @@ function startPresence() {
             token,
             intents: 0,
             properties: { os: 'linux', browser: 'cyberwolfert', device: 'cyberwolfert' },
-            presence: { status: 'online', activities: [{ name: 'CyberWolfert logs', type: 3 }], afk: false },
+            presence: { status: 'online', activities: [{ name: 'AeroSurf logs', type: 3 }], afk: false },
           },
         }));
         console.log('[presence] online');
@@ -182,8 +182,8 @@ function startPresence() {
 }
 
 app.listen(PORT, HOST, () => {
-  console.log(`[CyberWolfert] backend live op http://${HOST}:${PORT}`);
-  if (process.env.PUBLIC_URL) console.log(`[CyberWolfert] publiek via tunnel: ${process.env.PUBLIC_URL}`);
+  console.log(`[AeroSurf] backend live op http://${HOST}:${PORT}`);
+  if (process.env.PUBLIC_URL) console.log(`[AeroSurf] publiek via tunnel: ${process.env.PUBLIC_URL}`);
   startPresence();
   startSmtp();
   const { send, CHANNELS } = require('./discord');

@@ -135,7 +135,7 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(children: [
               const AppLogo(size: 90),
               const SizedBox(height: 16),
-              Text(_register ? 'Maak je CyberWolfert-account' : 'Log in op CyberWolfert',
+              Text(_register ? 'Maak je AeroSurf-account' : 'Log in op AeroSurf',
                   style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 4),
               const Text('Per account: eigen instellingen, geschiedenis en AI-geheugen.',
@@ -231,7 +231,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w900,
-                          color: Color(0xFF29B6F6))),
+                          color: Color(0xFF3CFF5C))),
                   label: const Text('Inloggen met Google'),
                 ),
               ),

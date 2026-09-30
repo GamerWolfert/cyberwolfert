@@ -30,8 +30,8 @@ const PERMS = {
     ['site.links', 'Prioriteitslinks beheren'],
     ['site.maintenance', 'Onderhoudsmodus'],
   ],
-  'WolfSyn & AI': [
-    ['wolf.servers', 'WolfSyn-servers bekijken/verwijderen'],
+  'AeroTalk & AI': [
+    ['wolf.servers', 'AeroTalk-servers bekijken/verwijderen'],
     ['ai.memory', 'AI-geheugen van gebruikers wissen'],
     ['ai.engine', 'AI-engine instellen'],
     ['agent.run', 'AI-agent op de Mini-PC laten uitvoeren'],

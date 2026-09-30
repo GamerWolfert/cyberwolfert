@@ -7,8 +7,8 @@ class SettingsProvider extends ChangeNotifier {
 
   String theme = 'dark';
   String backgroundType = 'color';
-  String backgroundValue = '#0B1020';
-  String accentColor = '#E63946';
+  String backgroundValue = '#050805';
+  String accentColor = '#3CFF5C';
   bool loading = true;
 
   Future<void> load() async {
@@ -18,8 +18,8 @@ class SettingsProvider extends ChangeNotifier {
       final s = await api.loadSettings();
       theme = (s['theme'] ?? 'dark').toString();
       backgroundType = (s['background_type'] ?? 'color').toString();
-      backgroundValue = (s['background_value'] ?? '#0B1020').toString();
-      accentColor = (s['accent_color'] ?? '#E63946').toString();
+      backgroundValue = (s['background_value'] ?? '#050805').toString();
+      accentColor = (s['accent_color'] ?? '#3CFF5C').toString();
     } catch (_) {}
     loading = false;
     notifyListeners();
@@ -46,7 +46,7 @@ class SettingsProvider extends ChangeNotifier {
     if (backgroundType == 'image' &&
         (backgroundValue.startsWith('http://') || backgroundValue.startsWith('https://'))) {
       bg = Image.network(backgroundValue, fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => Container(color: _hex('#0B1020')));
+          errorBuilder: (_, __, ___) => Container(color: _hex('#050805')));
     } else if (backgroundType == 'theme') {
       bg = Container(decoration: BoxDecoration(gradient: themeGradient(backgroundValue)));
     } else {
@@ -80,7 +80,7 @@ class SettingsProvider extends ChangeNotifier {
       if (h.length == 6) h = 'FF$h';
       return Color(int.parse(h, radix: 16));
     } catch (_) {
-      return const Color(0xFF29B6F6);
+      return const Color(0xFF3CFF5C);
     }
   }
 
@@ -90,7 +90,7 @@ class SettingsProvider extends ChangeNotifier {
       if (h.length == 6) h = 'FF$h';
       return Color(int.parse(h, radix: 16));
     } catch (_) {
-      return const Color(0xFF0B1020);
+      return const Color(0xFF050805);
     }
   }
 }

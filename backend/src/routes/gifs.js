@@ -1,4 +1,4 @@
-// WolfSyn GIF-bron: haalt grappige GIF's van Tenor op (geen API-key nodig).
+// AeroTalk GIF-bron: haalt grappige GIF's van Tenor op (geen API-key nodig).
 // GET /api/gifs?q=       -> { q, results:[{id,url,title,preview}] }
 // GET /api/gifs          -> trending
 // Cache 10 min in geheugen; fallback: lege lijst met reden.

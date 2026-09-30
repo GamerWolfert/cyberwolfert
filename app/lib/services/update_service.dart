@@ -7,7 +7,7 @@ import 'api_service.dart';
 
 /// Update-check: vergelijkt build-nummer met backend/version.json.
 class UpdateService {
-  static const int currentBuild = 29;
+  static const int currentBuild = 30;
 
   static Future<Map<String, dynamic>?> _fetch(String path) async {
     try {
@@ -64,7 +64,7 @@ class UpdateService {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('🐺 Update beschikbaar'),
+        title: const Text('🚀 Update beschikbaar'),
         content: Text(
             'Versie ${current['version']} (build ${current['build']}) is uit.\n\n${current['notes'] ?? ''}\n\nAlle apps krijgen precies dezelfde update.'),
         actions: [

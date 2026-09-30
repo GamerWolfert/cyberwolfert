@@ -187,7 +187,7 @@ class _WeatherCardState extends State<WeatherCard> {
                 Expanded(
                   child: Row(children: [
                     Icon(_weather?.icoon ?? Icons.cloud,
-                        size: 40, color: const Color(0xFF29B6F6)),
+                        size: 40, color: const Color(0xFF3CFF5C)),
                     const SizedBox(width: 12),
                     Flexible(
                       child: Column(

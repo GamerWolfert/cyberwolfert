@@ -1,4 +1,4 @@
--- Migratie naar 2.2.0 (idempotent): WolfSyn verdwijnende berichten + AI-agent
+-- Migratie naar 2.2.0 (idempotent): AeroTalk verdwijnende berichten + AI-agent
 -- Berichten verdwijnen 20 seconden nadat iedereen ze gelezen heeft.
 ALTER TABLE ws_messages ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
 ALTER TABLE ws_dms ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;

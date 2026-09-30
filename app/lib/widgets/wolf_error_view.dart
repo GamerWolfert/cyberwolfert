@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'app_logo.dart';
 
-/// Eigen WolfPulse-errorpagina: nooit merkteksten van andere browsers.
+/// Eigen AeroSeek-errorpagina: nooit merkteksten van andere browsers.
 class WolfErrorView extends StatelessWidget {
   final String url;
   final String? detail;

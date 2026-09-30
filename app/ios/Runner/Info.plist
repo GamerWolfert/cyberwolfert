@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>CyberWolfert Browser</string>
+	<string>AeroSurf Browser</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
@@ -24,7 +24,7 @@
 		<true/>
 	</dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>CyberWolfert gebruikt je locatie alleen voor het live weer op de startpagina.</string>
+	<string>AeroSurf gebruikt je locatie alleen voor het live weer op de startpagina.</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

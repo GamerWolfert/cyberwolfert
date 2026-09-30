@@ -27,7 +27,7 @@ class _Tab {
   String? url;
   _Tab();
   String get title {
-    if (url == null) return 'WolfPulse';
+    if (url == null) return 'AeroSeek';
     try {
       final h = Uri.parse(url!).host.replaceFirst(RegExp(r'^www\.'), '');
       return h.isEmpty ? 'Pagina' : h;
@@ -198,7 +198,7 @@ class _BrowserHomeScreenState extends State<BrowserHomeScreen> {
           children: [
             const AppLogo(size: 76),
             const SizedBox(height: 14),
-            const Text('Welkom bij CyberWolfert',
+            const Text('Welkom bij AeroSurf',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 6),
             const Text(
@@ -322,7 +322,7 @@ class _BrowserHomeScreenState extends State<BrowserHomeScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.groups),
-            tooltip: 'WolfSyn',
+            tooltip: 'AeroTalk',
             onPressed: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const WolfSynScreen()),
@@ -352,7 +352,7 @@ class _BrowserHomeScreenState extends State<BrowserHomeScreen> {
                         focusNode: _urlFocus,
                         onSubmitted: _submitBar,
                         decoration: const InputDecoration(
-                          hintText: 'Voer URL in of zoek via WolfPulse…',
+                          hintText: 'Voer URL in of zoek via AeroSeek…',
                           prefixIcon: Icon(Icons.lock_outline, size: 16),
                           border: OutlineInputBorder(),
                           isDense: true,
@@ -498,7 +498,38 @@ class _BrowserHomeScreenState extends State<BrowserHomeScreen> {
   }
 
   Widget _buildStartPage() {
-    return StartPage(key: ValueKey(_homeToken), onOpenUrl: _openUrl);
+    return StartPage(
+        key: ValueKey(_homeToken), onOpenUrl: _openUrl, onApp: _openApp);
+  }
+
+  /// Openen van de ingebouwde apps vanaf de startpagina-tegels.
+  void _openApp(String id) {
+    switch (id) {
+      case 'search':
+        _urlFocus.requestFocus();
+        break;
+      case 'ai':
+        _scaffoldKey.currentState?.openEndDrawer();
+        break;
+      case 'chat':
+        Navigator.push(context,
+            MaterialPageRoute(builder: (_) => const WolfSynScreen()));
+        break;
+      case 'mail':
+        Navigator.push(
+            context, MaterialPageRoute(builder: (_) => const MailScreen()));
+        break;
+      case 'downloads':
+        Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => DownloadsScreen(onOpenUrl: _openUrl)));
+        break;
+      case 'settings':
+        showModalBottomSheet(
+            context: context, builder: (_) => const BackgroundMenu());
+        break;
+    }
   }
 
   /// Alle webviews blijven gemount (IndexedStack): geluid/video loopt door

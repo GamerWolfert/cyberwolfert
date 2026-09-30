@@ -40,7 +40,7 @@ class _MadeByState extends State<MadeBy> {
   @override
   Widget build(BuildContext context) {
     return Text(
-      [_versie, 'Made by ${AppConfig.maker} 🐺']
+      [_versie, 'Made by ${AppConfig.maker} 🚀']
           .where((e) => e != null && e.isNotEmpty)
           .join(' • '),
       style: TextStyle(fontSize: widget.fontSize, color: Colors.white54),

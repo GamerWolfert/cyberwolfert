@@ -1,11 +1,11 @@
 {
-    "name": "CyberWolfert",
-    "short_name": "CyberWolfert",
+    "name": "AeroSurf",
+    "short_name": "AeroSurf",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0B1020",
-    "theme_color": "#0B1020",
-    "description": "CyberWolfert Browser met WolfPulse, WolfSyn en CyberWolf AI.",
+    "background_color": "#050805",
+    "theme_color": "#050805",
+    "description": "AeroSurf Browser met AeroSeek, AeroTalk en AeroNova AI.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

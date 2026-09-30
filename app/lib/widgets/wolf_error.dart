@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'app_logo.dart';
 
-/// Eigen WolfPulse-errorpagina: nooit Edge/Firefox/Chrome-teksten,
-/// altijd in CyberWolfert-style met opnieuw-proberen.
+/// Eigen AeroSeek-errorpagina: nooit Edge/Firefox/Chrome-teksten,
+/// altijd in AeroSurf-style met opnieuw-proberen.
 class WolfErrorView extends StatelessWidget {
   final String url;
   final String? detail;

@@ -1,4 +1,4 @@
-// Auth: eigen CyberWolfert-accounts (bcrypt + JWT) + Google-voorbereiding.
+// Auth: eigen AeroSurf-accounts (bcrypt + JWT) + Google-voorbereiding.
 // Elke request met "Authorization: Bearer <token>" wordt aan die gebruiker gekoppeld;
 // zonder token val je terug op de gedeelde 'wolfert'-gebruiker (gastmodus).
 const jwt = require('jsonwebtoken');

@@ -1,4 +1,4 @@
-// WolfPulse zoekproxy: eigen links eerst, daarna wereldwijde resultaten.
+// AeroSeek zoekproxy: eigen links eerst, daarna wereldwijde resultaten.
 // Werkt ALTIJD: DB optioneel, keten SearXNG -> Bing -> DuckDuckGo Lite -> Wikipedia.
 const express = require('express');
 const path = require('path');

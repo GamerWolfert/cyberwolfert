@@ -7,7 +7,7 @@ import '../services/download_fs.dart' as fs;
 import '../services/update_service.dart';
 import '../widgets/app_logo.dart';
 
-/// Downloadlijst zoals in echte browsers: alles wat je via CyberWolfert
+/// Downloadlijst zoals in echte browsers: alles wat je via AeroSurf
 /// downloadt staat hier en is vanuit de browser te openen.
 class DownloadsScreen extends StatefulWidget {
   final void Function(String url) onOpenUrl;
@@ -87,7 +87,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                   await AutoUpdate.checkAndInstall(context);
               if (!updated && context.mounted) {
                 messenger.showSnackBar(const SnackBar(
-                    content: Text('Je hebt de nieuwste versie. 🐺')));
+                    content: Text('Je hebt de nieuwste versie. 🚀')));
               }
             },
           ),
@@ -110,14 +110,14 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       const Icon(Icons.download_done,
-                          size: 64, color: Color(0xFF29B6F6)),
+                          size: 64, color: Color(0xFF3CFF5C)),
                       const SizedBox(height: 12),
                       const Text('Nog geen downloads',
                           style: TextStyle(
                               fontSize: 18, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 6),
                       const Text(
-                          'Bestanden die je via CyberWolfert downloadt\nkomen hier te staan.',
+                          'Bestanden die je via AeroSurf downloadt\nkomen hier te staan.',
                           textAlign: TextAlign.center,
                           style:
                               TextStyle(fontSize: 13, color: Colors.white70)),
@@ -125,7 +125,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                       FilledButton.icon(
                         onPressed: () => Navigator.pop(context),
                         icon: const Icon(Icons.search),
-                        label: const Text('Zoeken met WolfPulse'),
+                        label: const Text('Zoeken met AeroSeek'),
                       ),
                     ],
                   ),
@@ -138,7 +138,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                     return Card(
                       child: ListTile(
                         leading: Icon(_icon(e.name),
-                            color: const Color(0xFF29B6F6)),
+                            color: const Color(0xFF3CFF5C)),
                         title: Text(e.name,
                             maxLines: 1, overflow: TextOverflow.ellipsis),
                         subtitle: Text(

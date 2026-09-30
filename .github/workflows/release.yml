@@ -58,11 +58,11 @@ jobs:
         working-directory: app
       - run: flutter build windows --release --dart-define=API_BASE_URL=http://192.168.1.42:43711/api
         working-directory: app
-      - run: Compress-Archive -Path app\build\windows\x64\runner\Release\* -DestinationPath CyberWolfert-Windows.zip
+      - run: Compress-Archive -Path app\build\windows\x64\runner\Release\* -DestinationPath AeroSurf-Windows.zip
       - uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: CyberWolfert-Windows.zip
+          path: AeroSurf-Windows.zip
 
   web:
     runs-on: ubuntu-latest
@@ -76,11 +76,11 @@ jobs:
         working-directory: app
       - run: flutter build web --release
         working-directory: app
-      - run: cd app/build && zip -qr ../CyberWolfert-web.zip web
+      - run: cd app/build && zip -qr ../AeroSurf-web.zip web
       - uses: actions/upload-artifact@v4
         with:
           name: web
-          path: app/CyberWolfert-web.zip
+          path: app/AeroSurf-web.zip
 
   publish:
     needs: [android, windows, web]
@@ -93,17 +93,17 @@ jobs:
         with:
           path: artifacts
       - run: |
-          cp artifacts/apk/app-release.apk CyberWolfert.apk
-          cp artifacts/windows/CyberWolfert-Windows.zip .
-          cp artifacts/web/CyberWolfert-web.zip .
-          printf 'CyberWolfert installeren\n=========================\nAndroid: open CyberWolfert.apk en installeer.\n  -> Android zegt "App geblokkeerd om je apparaat te beschermen"?\n     Tik op Details en dan op "Toch installeren".\n     Werkt dat niet: Play Protect even uitzetten (Play Store > profilicoon > Play Protect > scans uitschakelen), installeren, en daarna weer aanzetten.\n  -> Staat er "App niet geïnstalleerd" (verouderde versie met andere tekening)?\n     Verwijder eerst de oude CyberWolfert-app en installeer daarna de nieuwe APK opnieuw.\nWindows: pak CyberWolfert-Windows.zip uit en start cyberwolfert_browser.exe.\nAlles-in-1: pak CyberWolfert-apps.zip uit.\n' > INSTALLEREN-LEESMIJ.txt
-          zip -qr CyberWolfert-apps.zip CyberWolfert.apk CyberWolfert-Windows.zip INSTALLEREN-LEESMIJ.txt
+          cp artifacts/apk/app-release.apk AeroSurf.apk
+          cp artifacts/windows/AeroSurf-Windows.zip .
+          cp artifacts/web/AeroSurf-web.zip .
+          printf 'AeroSurf installeren\n=========================\nAndroid: open AeroSurf.apk en installeer.\n  -> Android zegt "App geblokkeerd om je apparaat te beschermen"?\n     Tik op Details en dan op "Toch installeren".\n     Werkt dat niet: Play Protect even uitzetten (Play Store > profilicoon > Play Protect > scans uitschakelen), installeren, en daarna weer aanzetten.\n  -> Staat er "App niet geïnstalleerd" (verouderde versie met andere tekening)?\n     Verwijder eerst de oude AeroSurf-app en installeer daarna de nieuwe APK opnieuw.\nWindows: pak AeroSurf-Windows.zip uit en start cyberwolfert_browser.exe.\nAlles-in-1: pak AeroSurf-apps.zip uit.\n' > INSTALLEREN-LEESMIJ.txt
+          zip -qr AeroSurf-apps.zip AeroSurf.apk AeroSurf-Windows.zip INSTALLEREN-LEESMIJ.txt
       - uses: softprops/action-gh-release@v2
         with:
           files: |
-            CyberWolfert.apk
-            CyberWolfert-Windows.zip
-            CyberWolfert-web.zip
-            CyberWolfert-apps.zip
+            AeroSurf.apk
+            AeroSurf-Windows.zip
+            AeroSurf-web.zip
+            AeroSurf-apps.zip
             backend/version.json
-          body: CyberWolfert ${{ github.ref_name }} — APK, Windows, web en alles-in-1 bundle.
+          body: AeroSurf ${{ github.ref_name }} — APK, Windows, web en alles-in-1 bundle.

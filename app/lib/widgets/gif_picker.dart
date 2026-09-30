@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/wolfsyn_service.dart';
 
-/// WolfSyn GIF-kiezer (zoals Discord): tabs Gifs / Stickers / Emoji,
+/// AeroTalk GIF-kiezer (zoals Discord): tabs Gifs / Stickers / Emoji,
 /// zoekveld, categorie-tegels en een raster met resultaten.
 /// Geeft de gekozen URL (gif/sticker) of emoji-tekens terug, anders null.
 Future<String?> showWolfGifPicker(BuildContext context) => showDialog<String>(
@@ -24,7 +24,7 @@ const List<String> _kCategories = [
 ];
 
 const String _kEmojis =
-    '😀 😃 😄 😁 😆 😅 😂 🤣 🥲 ☺️ 😊 😇 🙂 🙃 😉 😌 😍 🥰 😘 😗 😙 😚 😋 😛 😝 🤪 🤨 🧐 🤓 😎 🥸 🤩 🥳 😏 😒 😞 😔 😟 😕 🙁 😣 😖 😫 😩 🥺 😢 😭 😤 😠 😡 🤬 🤯 😳 🥵 🥶 😱 😨 😰 😥 😓 🤗 🤔 🤭 🤫 😶 😐 😑 😬 🙄 😯 😴 🤤 😪 😮 😇 🥱 😴 🤒 🤕 🤢 🤮 🥴 🥵 🥶 🥸 😈 👿 👹 👺 🤡 💩 👻 💀 ☠️ 👽 👾 🤖 🎃 😺 😸 😻 😼 😽 🙀 😾 😿 😽 🐶 🐱 🐭 🐹 🐰 🦊 🐻 🐼 🐨 🐯 🦁 🐮 🐷 🐽 🐸 🐵 🐔 🐧 🐦 🐤 🐣 🦆 🦅 🦉 🦇 🐺 🐗 🐴 🦄 🐝 🐛 🦋 🐌 🐞 🐜 🪰 🪲 🐢 🐍 🐙 🦑 🦀 🐡 🐠 🐟 🐬 🐳 🦈 🐋 🐊 ⚽ 🏀 🎾 🏐 🏑 🏒 ⛳ 🎣 🎱 🎳 🎮 🎲 🎯 🎤 🎧 🎸 🎹 🎺 🎻 🕺 💃 🎂 🎈 🎁 🎉 🎊 🏆 🥇 🥈 🥉 🏅 🕐 🕑 🕒 🕓 🕔 🕕 🕖 🕗 🕘 🕙 🕚 🕛 ⏰ ⏱️ ⏲️ 🔥 ✨ 🎄 🎅 ⭐ 🌟 💫 ⚡ 💥 ❄️ 🌈 ☀️ 🌙 ☁️ ⛅ 🌧️ ⛈️ 🌬️ 🌊 💧 🍔 🍟 🍕 🌭 🥪 🌮 🌯 🥙 🥗 🍜 🍛 🍚 🍣 🍱 🥟 🍰 🍪 🍩 🍦 🍨 🍫 🍬 🍭 🍯 🥛 ☕ 🍵 🍺 🍻 🥂 🍷 🥃 🍸 🍹 🧊 ❤️ 🧡 💛 💚 💙 💜 🖤 🤍 🤎 💔 ❣️ 💕 💞 💓 💗 💖 💘 💝 💟 ✅ ❌ ⭕ ❗ ❓ 💯 🔔 🔕 🚫 💢 ⚠️ 🚸 🚧 🚦 🛑 🆗 🆕 🆒 🆓 🆑 ♿ 🚹 🚺 🚻 🚼 🛗 🚪 🔞 📵 🚭 📳 📴 🔀 🔁 🔂 ▶️ ⏸️ ⏹️ ⏺️ ⏭️ ⏮️ ⤵️ ⤴️ 🔚 🔜 🔛 📶 📡 🔋 🔌 💡 🔦 🔒 🔓 🔑 🔨 ⚙️ 🔧 🔩 🔪 🗡️ 🔫 🛡️ 💉 🩹 🩺 🧬 🔬 🔭 💣 🔥 💯 🆗 👍 👎 👌 🤌 🤏 ✌️ 🤞 🫶 🤟 🤘 🤙 👈 👉 👆 👇 ☝️ ✋ 🤚 🖐️ 🖖 👋 🤝 🙏 💪 🦾 ✍️ 💅 👏 🙌 👐 🤲 🫡 🫰';
+    '😀 😃 😄 😁 😆 😅 😂 🤣 🥲 ☺️ 😊 😇 🙂 🙃 😉 😌 😍 🥰 😘 😗 😙 😚 😋 😛 😝 🤪 🤨 🧐 🤓 😎 🥸 🤩 🥳 😏 😒 😞 😔 😟 😕 🙁 😣 😖 😫 😩 🥺 😢 😭 😤 😠 😡 🤬 🤯 😳 🥵 🥶 😱 😨 😰 😥 😓 🤗 🤔 🤭 🤫 😶 😐 😑 😬 🙄 😯 😴 🤤 😪 😮 😇 🥱 😴 🤒 🤕 🤢 🤮 🥴 🥵 🥶 🥸 😈 👿 👹 👺 🤡 💩 👻 💀 ☠️ 👽 👾 🤖 🎃 😺 😸 😻 😼 😽 🙀 😾 😿 😽 🐶 🐱 🐭 🐹 🐰 🦊 🐻 🐼 🐨 🐯 🦁 🐮 🐷 🐽 🐸 🐵 🐔 🐧 🐦 🐤 🐣 🦆 🦅 🦉 🦇 🚀 🐗 🐴 🦄 🐝 🐛 🦋 🐌 🐞 🐜 🪰 🪲 🐢 🐍 🐙 🦑 🦀 🐡 🐠 🐟 🐬 🐳 🦈 🐋 🐊 ⚽ 🏀 🎾 🏐 🏑 🏒 ⛳ 🎣 🎱 🎳 🎮 🎲 🎯 🎤 🎧 🎸 🎹 🎺 🎻 🕺 💃 🎂 🎈 🎁 🎉 🎊 🏆 🥇 🥈 🥉 🏅 🕐 🕑 🕒 🕓 🕔 🕕 🕖 🕗 🕘 🕙 🕚 🕛 ⏰ ⏱️ ⏲️ 🔥 ✨ 🎄 🎅 ⭐ 🌟 💫 ⚡ 💥 ❄️ 🌈 ☀️ 🌙 ☁️ ⛅ 🌧️ ⛈️ 🌬️ 🌊 💧 🍔 🍟 🍕 🌭 🥪 🌮 🌯 🥙 🥗 🍜 🍛 🍚 🍣 🍱 🥟 🍰 🍪 🍩 🍦 🍨 🍫 🍬 🍭 🍯 🥛 ☕ 🍵 🍺 🍻 🥂 🍷 🥃 🍸 🍹 🧊 ❤️ 🧡 💛 💚 💙 💜 🖤 🤍 🤎 💔 ❣️ 💕 💞 💓 💗 💖 💘 💝 💟 ✅ ❌ ⭕ ❗ ❓ 💯 🔔 🔕 🚫 💢 ⚠️ 🚸 🚧 🚦 🛑 🆗 🆕 🆒 🆓 🆑 ♿ 🚹 🚺 🚻 🚼 🛗 🚪 🔞 📵 🚭 📳 📴 🔀 🔁 🔂 ▶️ ⏸️ ⏹️ ⏺️ ⏭️ ⏮️ ⤵️ ⤴️ 🔚 🔜 🔛 📶 📡 🔋 🔌 💡 🔦 🔒 🔓 🔑 🔨 ⚙️ 🔧 🔩 🔪 🗡️ 🔫 🛡️ 💉 🩹 🩺 🧬 🔬 🔭 💣 🔥 💯 🆗 👍 👎 👌 🤌 🤏 ✌️ 🤞 🫶 🤟 🤘 🤙 👈 👉 👆 👇 ☝️ ✋ 🤚 🖐️ 🖖 👋 🤝 🙏 💪 🦾 ✍️ 💅 👏 🙌 👐 🤲 🫡 🫰';
 
 class _WolfGifPicker extends StatefulWidget {
   const _WolfGifPicker();

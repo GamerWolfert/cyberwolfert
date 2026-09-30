@@ -5,7 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'download_fs.dart' as fs;
 
-/// Downloadbeheer zoals in echte browsers: alles wat je via CyberWolfert
+/// Downloadbeheer zoals in echte browsers: alles wat je via AeroSurf
 /// downloadt komt in de lijst en is vanuit de browser te openen.
 class DownloadEntry {
   final String name;

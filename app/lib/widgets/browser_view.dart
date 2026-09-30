@@ -10,7 +10,7 @@ import 'internal_web.dart';
 import 'windows_webview.dart';
 import 'wolf_error.dart';
 
-/// Echte CyberWolfert-browser, alles intern:
+/// Echte AeroSurf-browser, alles intern:
 /// - Android/iOS/macOS: ingebedde WebView
 /// - Windows: ingebedde Edge WebView2
 /// - Web: intern iframe-blad (direct of via proxy bij framing-blokkade)
@@ -272,9 +272,9 @@ class _BrowserViewState extends State<BrowserView> {
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 8),
                 child: Tooltip(
-                  message: 'Deze site weigert inbedden; hij loopt veilig via de CyberWolfert-proxy. Inloggen op zo\'n site kan beperkt werken.',
-                  child: Text('⚡ via CyberWolfert',
-                      style: TextStyle(fontSize: 12, color: Color(0xFF29B6F6))),
+                  message: 'Deze site weigert inbedden; hij loopt veilig via de AeroSurf-proxy. Inloggen op zo\'n site kan beperkt werken.',
+                  child: Text('⚡ via AeroSurf',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF3CFF5C))),
                 ),
               ),
             IconButton(icon: const Icon(Icons.open_in_new), onPressed: _openExternal,

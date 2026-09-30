@@ -1,4 +1,4 @@
-// CyberWolfert page-proxy: sites die iframes weigeren toch BINNEN de browser.
+// AeroSurf page-proxy: sites die iframes weigeren toch BINNEN de browser.
 // GET /api/frame-check?url=... -> { framing: 'open'|'blocked'|'na' }
 // GET /api/proxy?url=... -> pagina zonder framing-headers (alleen text/html)
 // SSRF-guard: alleen publieke http(s), geen LAN/loopback, poort 80/443, max 3MB.
@@ -85,7 +85,7 @@ router.get('/proxy', async (req, res) => {
     } else {
       html = base + html;
     }
-    html = html.replace(/<body([^>]*)>/i, '<body$1><!-- via CyberWolfert proxy -->');
+    html = html.replace(/<body([^>]*)>/i, '<body$1><!-- via AeroSurf proxy -->');
     res.set('Content-Type', 'text/html; charset=utf-8');
     res.set('Cache-Control', 'no-store');
     res.send(html);

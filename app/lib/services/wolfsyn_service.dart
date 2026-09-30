@@ -1,6 +1,6 @@
 import 'api_service.dart';
 
-/// WolfSyn API: servers, kanalen, berichten, rollen, DM's, profiel.
+/// AeroTalk API: servers, kanalen, berichten, rollen, DM's, profiel.
 class WolfSynService {
   final ApiService _api = ApiService();
 
@@ -116,7 +116,7 @@ class WolfSynService {
       (await _api.apiPut('/wolf/profile',
           {'display_name': displayName, 'bio': bio})) as Map<String, dynamic>;
 
-  /// GIF's/stickers voor de WolfSyn-kiezer (Tenor via de backend).
+  /// GIF's/stickers voor de AeroTalk-kiezer (Tenor via de backend).
   Future<List<dynamic>> gifs(String q, {bool stickers = false}) async {
     final term = q.trim().isNotEmpty ? q.trim() : (stickers ? 'sticker' : '');
     final r = await _api

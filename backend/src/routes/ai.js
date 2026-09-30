@@ -1,5 +1,5 @@
-// CyberWolf AI: Ollama -> OpenAI-compat -> lokale slimme modus (met geheugen).
-// Presenteert zich ALTIJD als "CyberWolf AI".
+// AeroNova AI: Ollama -> OpenAI-compat -> lokale slimme modus (met geheugen).
+// Presenteert zich ALTIJD als "AeroNova AI".
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
@@ -11,12 +11,12 @@ const { globalSearch } = require('./search');
 const router = express.Router();
 
 const IDENTITY =
-  'Je bent CyberWolf AI, de vaste slimme assistent van de CyberWolfert Browser. ' +
+  'Je bent AeroNova AI, de vaste slimme assistent van de AeroSurf Browser. ' +
   'Je hebt een eigen Mini-PC (Linux) met internet, PostgreSQL, Ollama en Discord-logging.';
 
 const STYLE =
   'Regels voor elke reactie: ' +
-  '1) Noem jezelf ALLEEN CyberWolf AI, nooit een andere modelnaam. ' +
+  '1) Noem jezelf ALLEEN AeroNova AI, nooit een andere modelnaam. ' +
   '2) Schrijf perfect, natuurlijk Nederlands: spreek de gebruiker aan met "je", nooit met "u". ' +
   '3) Schrijf ALTIJD in de eerste persoon (ik/mij/mijn), NOOIT in de derde persoon. ' +
   '4) Wees respectvol en hartelijk, zonder slijmerig te worden. ' +
@@ -231,7 +231,7 @@ async function quickReply(message, req) {
   const m = message.toLowerCase().trim();
 
   if (/^(hoi|hallo|hey|hai|yo|hallo daar)\b/.test(m) && m.length < 24) {
-    return 'Hoi! Waar kan ik je mee helpen? 🐺';
+    return 'Hoi! Waar kan ik je mee helpen? 🚀';
   }
   if (m.includes('help') || m.includes('wat kun je') || m.includes('wat kan je')) {
     return 'Dit kan ik voor je doen:\n' +
@@ -239,13 +239,13 @@ async function quickReply(message, req) {
       '• Code en scripts schrijven — zeg bv. "maak een Python-script dat …"\n' +
       '• Live zoeken: "zoek <onderwerp> op"\n' +
       '• Onthouden: "onthoud dat …" en "wat weet je van me"\n' +
-      '• Apps downloaden: typ "download" in WolfPulse\n' +
+      '• Apps downloaden: typ "download" in AeroSeek\n' +
       '• Op je Mini-PC werken: "voer uit: maak een script dat …" — ik maak een plan en jij geeft toestemming\n' +
-      `• Status: CyberWolfert ${v.version || '?'} (build ${v.build || '?'})`;
+      `• Status: AeroSurf ${v.version || '?'} (build ${v.build || '?'})`;
   }
   if (m.includes('wie ben je') || m.includes('je naam') || m.includes('welk model') ||
       m.includes('hoe heet je') || m.includes('hoe heet jij') || m.includes('ben jij een ai')) {
-    return 'Ik ben CyberWolf AI, de vaste assistent van de CyberWolfert Browser. 🐺 Ik draai zelf op jouw Mini-PC.';
+    return 'Ik ben AeroNova AI, de vaste assistent van de AeroSurf Browser. 🚀 Ik draai zelf op jouw Mini-PC.';
   }
   const naamIs = m.match(/(?:mijn naam is|ik heet|noem me)\s+(.+)/);
   if (naamIs && naamIs[1].trim().length > 1 && naamIs[1].trim().length < 40) {
@@ -253,7 +253,7 @@ async function quickReply(message, req) {
     const uid = await effectiveUserId(req);
     await saveMemory(uid, `mijn naam is ${naam}`);
     const mooi = naam.charAt(0).toUpperCase() + naam.slice(1);
-    return `Leuk je te ontmoeten, ${mooi}! 🐺 Ik heb het onthouden.`;
+    return `Leuk je te ontmoeten, ${mooi}! 🚀 Ik heb het onthouden.`;
   }
   if (m.includes('hoe heet ik') || m.includes('weet je mijn naam') ||
       m.includes('hoe denk je dat ik heet') || m.includes('wat is mijn naam')) {
@@ -262,15 +262,15 @@ async function quickReply(message, req) {
     const naamFeit = feiten.find((f) => /naam is/i.test(f));
     if (naamFeit) {
       const nm = naamFeit.replace(/.*naam is\s+/i, '').trim();
-      return `Jij bent ${nm}! 🐺 (Dat heb je me zelf verteld.)`;
+      return `Jij bent ${nm}! 🚀 (Dat heb je me zelf verteld.)`;
     }
-    return 'Dat weet ik nog niet! Zeg "mijn naam is ..." en ik vergeet het nooit meer. 🐺';
+    return 'Dat weet ik nog niet! Zeg "mijn naam is ..." en ik vergeet het nooit meer. 🚀';
   }
   if (m.includes('download') || m.includes('apk') || m.includes('installeren') || m.includes('exe')) {
-    return `Apps downloaden kan zo:\n• Typ het codewoord "download" in de WolfPulse-zoekbalk, of\n• Open direct: ${base}/downloads/CyberWolfert-apps.zip\nDaarin zit de Android-APK, Windows-versie en uitleg.`;
+    return `Apps downloaden kan zo:\n• Typ het codewoord "download" in de AeroSeek-zoekbalk, of\n• Open direct: https://github.com/GamerWolfert/cyberwolfert/releases/download/v${v.version || '0.0.0'}/AeroSurf-apps.zip\nDaarin zit de Android-APK, Windows-versie en uitleg.`;
   }
   if (m.includes('versie') || m.includes('update')) {
-    return `We draaien CyberWolfert ${v.version || '?'} (build ${v.build || '?'}). ` +
+    return `We draaien AeroSurf ${v.version || '?'} (build ${v.build || '?'}). ` +
       'Bij een nieuwe publish krijg je een update-melding bij het opstarten.';
   }
   const onthoud = m.match(/onthoud\s+(?:dat\s+)?(.+)/);
@@ -305,18 +305,18 @@ async function quickReply(message, req) {
       const top = results.slice(0, 5)
         .map((r, i) => `${i + 1}. ${r.title}\n   ${r.url}${r.snippet ? `\n   ${r.snippet.slice(0, 140)}` : ''}`)
         .join('\n');
-      return `Dit vond WolfPulse voor "${q}":\n${top}\n\nTik op een resultaat om het in CyberWolfert te openen.`;
+      return `Dit vond AeroSeek voor "${q}":\n${top}\n\nTik op een resultaat om het in AeroSurf te openen.`;
     }
   }
   if (m.includes('wolfpulse') || m.includes(' zoekmachine')) {
-    return 'WolfPulse is onze eigen zoekmachine: eigen links eerst, daarna resultaten via SearXNG/DuckDuckGo/Wikipedia. Alles loopt via jouw Mini-PC.';
+    return 'AeroSeek is onze eigen zoekmachine: eigen links eerst, daarna resultaten via SearXNG/DuckDuckGo/Wikipedia. Alles loopt via jouw Mini-PC.';
   }
-  if (m.includes('dank')) return 'Graag gedaan! 🐺 Waar kan ik je nog mee helpen?';
+  if (m.includes('dank')) return 'Graag gedaan! 🚀 Waar kan ik je nog mee helpen?';
   if (/^(test|hallo+$|hey+$|hoi+$|ok|oké|ja|nee|hmm+|super|top)\.?$/.test(m)) {
     const variants = [
-      'Ik ben er! 🐺 Stel me een vraag, zeg "zoek <onderwerp> op" of typ "help".',
-      'Hoi hoi! 🐺 Waar kan ik je mee helpen?',
-      'Aangesloten en klaar! 🐺 Vraag me iets, of laat me iets opzoeken.',
+      'Ik ben er! 🚀 Stel me een vraag, zeg "zoek <onderwerp> op" of typ "help".',
+      'Hoi hoi! 🚀 Waar kan ik je mee helpen?',
+      'Aangesloten en klaar! 🚀 Vraag me iets, of laat me iets opzoeken.',
     ];
     let h = 0;
     for (const ch of m) h = (h * 31 + ch.codePointAt(0)) % 997;
@@ -337,7 +337,7 @@ async function webContext(message, codeMode) {
     const top = results.slice(0, 3)
       .map((r) => `- ${r.title}: ${r.snippet || ''} (${r.url})`)
       .join('\n');
-    return `\nLive zoekresultaten van WolfPulse (gebruik als het klopt, verzin niets):\n${top}`;
+    return `\nLive zoekresultaten van AeroSeek (gebruik als het klopt, verzin niets):\n${top}`;
   } catch (_) {
     return '';
   }
@@ -404,7 +404,7 @@ router.post('/chat', uploadAi.single('image'), async (req, res) => {
       if (quick) {
         logChat(message, quick, req);
         log.ai(await naamOf(await effectiveUserId(req)), message, 'quick');
-        return res.json({ assistant: 'CyberWolf AI', reply: quick, engine: 'quick', code: false });
+        return res.json({ assistant: 'AeroNova AI', reply: quick, engine: 'quick', code: false });
       }
     } catch (e) {
       console.warn('[ai] quick failed:', e.message);
@@ -422,7 +422,7 @@ router.post('/chat', uploadAi.single('image'), async (req, res) => {
   const ctx = await webContext(message, codeMode);
   const sysFor = (cm) =>
     IDENTITY + '\n' + STYLE + (cm ? '\n' + CODING : '') + memoryLine + ctx +
-    `\nHet is nu ${new Date().toLocaleString('nl-NL')}. CyberWolfert ${versionInfo().version}.`;
+    `\nHet is nu ${new Date().toLocaleString('nl-NL')}. AeroSurf ${versionInfo().version}.`;
   const build = (cm) => [
     { role: 'system', content: sysFor(cm) },
     ...(Array.isArray(history) ? history.slice(-10) : []),
@@ -478,13 +478,13 @@ router.post('/chat', uploadAi.single('image'), async (req, res) => {
       out = { reply, engine: 'local' };
     } catch (e) {
       console.error(e);
-      return res.status(500).json({ assistant: 'CyberWolf AI', error: 'ai_failed' });
+      return res.status(500).json({ assistant: 'AeroNova AI', error: 'ai_failed' });
     }
   }
   logChat(imageUrl ? `${message} [afbeelding: ${imageUrl}]` : message, out.reply, req);
   log.ai(await naamOf(await effectiveUserId(req)), message, out.engine);
   res.json({
-    assistant: 'CyberWolf AI',
+    assistant: 'AeroNova AI',
     reply: out.reply,
     engine: out.engine,
     code: codeMode,
@@ -499,10 +499,10 @@ async function fallbackReply(message, req, codeMode) {
   if (codeMode) {
     return 'Ik draai nu zonder model, dus ik kan de code niet zelf genereren. ' +
       'Zet Ollama aan op de Mini-PC (model: qwen2.5-coder:3b) en probeer het opnieuw — dan schrijf ik het script meteen voor je. ' +
-      `CyberWolfert ${v.version}.`;
+      `AeroSurf ${v.version}.`;
   }
   return 'Ik draai nu in lokale modus (geen Ollama verbonden), maar ik kan wel: ' +
-    'zoeken via WolfPulse ("zoek <onderwerp> op"), uitleg geven ("help"), geheugen ("onthoud dat ...") en downloads regelen ("download")' +
+    'zoeken via AeroSeek ("zoek <onderwerp> op"), uitleg geven ("help"), geheugen ("onthoud dat ...") en downloads regelen ("download")' +
     (feiten.length ? `.\nWat ik van je weet: ${feiten.slice(0, 3).join('; ')}` : '.');
 }
 

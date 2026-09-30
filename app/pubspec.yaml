@@ -1,7 +1,7 @@
 name: cyberwolfert_browser
-description: CyberWolfert Browser met WolfPulse zoekmachine en CyberWolf AI-assistent.
+description: AeroSurf Browser met AeroSeek zoekmachine en AeroNova AI-assistent.
 publish_to: 'none'
-version: 2.5.5+29
+version: 2.6.0+30
 
 environment:
   sdk: '>=3.2.0 <4.0.0'

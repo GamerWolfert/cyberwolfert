@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 
-/// Google-like search results page for WolfPulse
+/// Google-like search results page for AeroSeek
 class SearchResultsScreen extends StatefulWidget {
   final String query;
   final void Function(String url) onOpenUrl;
@@ -90,7 +90,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
           onSubmitted: (_) => _search(),
           autofocus: true,
           decoration: InputDecoration(
-            hintText: 'Zoek met WolfPulse…',
+            hintText: 'Zoek met AeroSeek…',
             border: InputBorder.none,
             hintStyle: const TextStyle(color: Colors.white54),
             prefixIcon: const Icon(Icons.search, color: Colors.white54),
@@ -139,7 +139,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
           Padding(
             padding: const EdgeInsets.only(bottom: 16),
             child: Text(
-              '🐺 WolfPulse — ${_ctrl.text}',
+              '🚀 AeroSeek — ${_ctrl.text}',
               style: const TextStyle(
                 fontSize: 26,
                 fontWeight: FontWeight.w900,
@@ -239,7 +239,7 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
       child: ListTile(
         leading: Icon(
           isLocal ? Icons.star : Icons.public,
-          color: isLocal ? Colors.amber : const Color(0xFF29B6F6),
+          color: isLocal ? Colors.amber : const Color(0xFF3CFF5C),
           size: 22,
         ),
         title: Text(

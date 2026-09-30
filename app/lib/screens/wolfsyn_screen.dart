@@ -59,7 +59,7 @@ String wolfLastSeen(dynamic raw) {
   return 'Online op ${dt.day}-${dt.month}-${dt.year}';
 }
 
-/// WolfSyn: community zoals Discord — servers, kanalen, rollen, DM's.
+/// AeroTalk: community zoals Discord — servers, kanalen, rollen, DM's.
 /// Volledig scherm; zonder login eerst naar browser-login.
 class WolfSynScreen extends StatefulWidget {
   const WolfSynScreen({super.key});
@@ -127,14 +127,14 @@ class _WolfSynScreenState extends State<WolfSynScreen>
     final auth = context.watch<AuthProvider>();
     if (!auth.loggedIn) {
       return Scaffold(
-        appBar: AppBar(title: const Text('WolfSyn')),
+        appBar: AppBar(title: const Text('AeroTalk')),
         body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               const AppLogo(size: 90),
               const SizedBox(height: 12),
-              const Text('Log eerst in op je browser-account\nom WolfSyn te gebruiken.',
+              const Text('Log eerst in op je browser-account\nom AeroTalk te gebruiken.',
                   textAlign: TextAlign.center),
               const SizedBox(height: 12),
               FilledButton.icon(
@@ -160,7 +160,7 @@ class _WolfSynScreenState extends State<WolfSynScreen>
           children: [
             AppLogo(size: 28, showName: false),
             SizedBox(width: 8),
-            Text('WolfSyn'),
+            Text('AeroTalk'),
           ],
         ),
         actions: [
@@ -271,7 +271,7 @@ class _WolfSynScreenState extends State<WolfSynScreen>
                     padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
-                          colors: [Color(0xFF7B2FF7), Color(0xFF29B6F6)]),
+                          colors: [Color(0xFF7B2FF7), Color(0xFF3CFF5C)]),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text('⚡ $level',
@@ -480,7 +480,7 @@ class _WolfSynScreenState extends State<WolfSynScreen>
   }
 
   Color _boostColor(int level) =>
-      level >= 2 ? const Color(0xFFF4B400) : const Color(0xFF29B6F6);
+      level >= 2 ? const Color(0xFFF4B400) : const Color(0xFF3CFF5C);
 
   Widget _sectionHeader(String t) => Padding(
         padding: const EdgeInsets.only(top: 14, bottom: 4),
@@ -848,12 +848,12 @@ class _WolfSynScreenState extends State<WolfSynScreen>
             const Text('Tik op de foto om te wijzigen',
                 style: TextStyle(fontSize: 11, color: Colors.white54)),
             const SizedBox(height: 12),
-            const Text('Mijn WolfSyn-profiel (los van browser-loginnaam)',
+            const Text('Mijn AeroTalk-profiel (los van browser-loginnaam)',
                 style: TextStyle(fontWeight: FontWeight.bold)),
             TextField(
                 controller: naam,
                 decoration:
-                    const InputDecoration(labelText: 'WolfSyn-naam')),
+                    const InputDecoration(labelText: 'AeroTalk-naam')),
             TextField(
                 controller: bio,
                 decoration: const InputDecoration(labelText: 'Bio')),
@@ -1016,7 +1016,7 @@ class _ServerScreenState extends State<ServerScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                      colors: [Color(0xFF7B2FF7), Color(0xFF29B6F6)]),
+                      colors: [Color(0xFF7B2FF7), Color(0xFF3CFF5C)]),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text('⚡ $_boostLevel',
@@ -1119,7 +1119,7 @@ class _ServerScreenState extends State<ServerScreen> {
                                                       ((r is Map
                                                               ? r['color']
                                                               : null) ??
-                                                          '#29B6F6')
+                                                          '#3CFF5C')
                                                           .toString()),
                                                   borderRadius:
                                                       BorderRadius.circular(
@@ -1214,7 +1214,7 @@ class _ServerScreenState extends State<ServerScreen> {
       if (h.length == 6) h = 'FF$h';
       return Color(int.parse(h, radix: 16));
     } catch (_) {
-      return const Color(0xFF29B6F6);
+      return const Color(0xFF3CFF5C);
     }
   }
 
@@ -1481,7 +1481,7 @@ class _ServerScreenState extends State<ServerScreen> {
               onPressed: () async {
                 if (naam.text.trim().isEmpty) return;
                 await _api.createRole(widget.serverId, naam.text.trim(),
-                    '#29B6F6',
+                    '#3CFF5C',
                     manage: manage, kick: kick);
                 if (mounted) Navigator.pop(ctx);
                 _load();

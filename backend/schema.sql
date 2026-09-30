@@ -1,5 +1,5 @@
 -- =============================================
--- CyberWolfert DB schema (PostgreSQL op Mini-PC)
+-- AeroSurf DB schema (PostgreSQL op Mini-PC)
 -- psql -h 192.168.1.42 -U wolfert -d cyberwolfert_db -f schema.sql
 -- =============================================
 
@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS revoked_tokens (
   revoked_before TIMESTAMPTZ DEFAULT NOW()
 );
 
--- WolfSyn: servers (groepen), rollen, kanalen, berichten, DM's
+-- AeroTalk: servers (groepen), rollen, kanalen, berichten, DM's
 CREATE TABLE IF NOT EXISTS ws_servers (
   id SERIAL PRIMARY KEY,
   owner_id INT REFERENCES users(id) ON DELETE CASCADE,
@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS ws_roles (
   id SERIAL PRIMARY KEY,
   server_id INT REFERENCES ws_servers(id) ON DELETE CASCADE,
   name VARCHAR(32) NOT NULL,
-  color VARCHAR(16) DEFAULT '#29B6F6',
+  color VARCHAR(16) DEFAULT '#3CFF5C',
   can_manage BOOLEAN DEFAULT FALSE,
   can_kick BOOLEAN DEFAULT FALSE,
   position INT DEFAULT 0
@@ -116,7 +116,7 @@ CREATE TABLE IF NOT EXISTS ws_message_log (
 );
 CREATE INDEX IF NOT EXISTS idx_ws_message_log_time ON ws_message_log(deleted_at DESC);
 
--- WolfSyn-profiel los van browser-loginnaam
+-- AeroTalk-profiel los van browser-loginnaam
 CREATE TABLE IF NOT EXISTS ws_profiles (
   user_id INT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   display_name VARCHAR(64),
@@ -129,8 +129,8 @@ CREATE TABLE IF NOT EXISTS user_settings (
   user_id INT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   theme VARCHAR(32) DEFAULT 'dark',
   background_type VARCHAR(32) DEFAULT 'color',
-  background_value TEXT DEFAULT '#0B1020',
-  accent_color VARCHAR(16) DEFAULT '#E63946',
+  background_value TEXT DEFAULT '#050805',
+  accent_color VARCHAR(16) DEFAULT '#3CFF5C',
   homepage_url TEXT DEFAULT 'wolfpulse://home',
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -222,7 +222,7 @@ ON CONFLICT (name) DO NOTHING;
 
 INSERT INTO users (username) VALUES ('wolfert') ON CONFLICT (username) DO NOTHING;
 INSERT INTO user_settings (user_id, theme, background_type, background_value)
-SELECT id, 'dark', 'color', '#0B1020' FROM users WHERE username='wolfert'
+SELECT id, 'dark', 'color', '#050805' FROM users WHERE username='wolfert'
 ON CONFLICT (user_id) DO NOTHING;
 
 INSERT INTO custom_links (user_id, keyword, title, url, description, priority)
@@ -285,7 +285,7 @@ ON CONFLICT (domain) DO NOTHING;
 UPDATE site_roles SET permissions = permissions || '{"mail.manage": true}'::jsonb
  WHERE name = 'admin' AND NOT (permissions ? 'mail.manage');
 
--- 12. WolfSyn 2.4.0: server-tags, vrienden, groeps-DM's, boosts
+-- 12. AeroTalk 2.4.0: server-tags, vrienden, groeps-DM's, boosts
 ALTER TABLE ws_members ADD COLUMN IF NOT EXISTS server_tag VARCHAR(24);
 
 CREATE TABLE IF NOT EXISTS ws_friend_requests (
@@ -339,4 +339,4 @@ CREATE TABLE IF NOT EXISTS ws_boosts (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (server_id, user_id)
 );
-ALTER TABLE ws_servers ADD COLUMN IF NOT EXISTS banner_color VARCHAR(16) DEFAULT '#29B6F6';
+ALTER TABLE ws_servers ADD COLUMN IF NOT EXISTS banner_color VARCHAR(16) DEFAULT '#3CFF5C';

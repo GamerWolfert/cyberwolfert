@@ -42,8 +42,8 @@ class AppConfig {
     return out.toSet().toList();
   }
 
-  static const String browserName = 'CyberWolfert Browser';
-  static const String searchName = 'WolfPulse';
-  static const String aiName = 'CyberWolf AI';
+  static const String browserName = 'AeroSurf Browser';
+  static const String searchName = 'AeroSeek';
+  static const String aiName = 'AeroNova AI';
   static const String maker = 'GamerWolfertYT';
 }

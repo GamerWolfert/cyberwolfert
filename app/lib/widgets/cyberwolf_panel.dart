@@ -6,7 +6,7 @@ import '../config/constants.dart';
 import '../services/api_service.dart';
 import 'made_by.dart';
 
-/// CyberWolf AI-zijpaneel: tekst + afbeeldingen, groene eigen ballonnen.
+/// AeroNova AI-zijpaneel: tekst + afbeeldingen, groene eigen ballonnen.
 class _ChatMsg {
   String role;
   String text;
@@ -26,7 +26,7 @@ class _CyberWolfPanelState extends State<CyberWolfPanel> {
   final _api = ApiService();
   final _scroll = ScrollController();
   final List<_ChatMsg> _msgs = [
-    _ChatMsg('assistant', 'Hoi! Ik ben CyberWolf AI 🐺. Waar kan ik je mee helpen?\n\n- Vraag om code of uitleg\n- Typ **voer uit:** + je doel, dan maak ik een plan voor de Mini-PC en vraag ik toestemming')
+    _ChatMsg('assistant', 'Hoi! Ik ben AeroNova AI 🚀. Waar kan ik je mee helpen?\n\n- Vraag om code of uitleg\n- Typ **voer uit:** + je doel, dan maak ik een plan voor de Mini-PC en vraag ik toestemming')
   ];
   bool _busy = false;
   bool? _online;
@@ -104,7 +104,7 @@ class _CyberWolfPanelState extends State<CyberWolfPanel> {
       setState(() {
         _online = false;
         _msgs.add(_ChatMsg('assistant',
-            'CyberWolf AI is offline. Controleer of de backend draait en probeer het opnieuw.'));
+            'AeroNova AI is offline. Controleer of de backend draait en probeer het opnieuw.'));
       });
     }
     setState(() => _busy = false);
@@ -273,7 +273,7 @@ class _CyberWolfPanelState extends State<CyberWolfPanel> {
                 height: 40,
                 fit: BoxFit.cover,
                 errorBuilder: (_, __, ___) =>
-                    const CircleAvatar(child: Text('🐺')),
+                    const CircleAvatar(child: Text('🚀')),
               ),
             ),
             title: const Text(AppConfig.aiName,
@@ -395,7 +395,7 @@ class _CyberWolfPanelState extends State<CyberWolfPanel> {
                     controller: _ctrl,
                     onSubmitted: (_) => _send(),
                     decoration: const InputDecoration(
-                        hintText: 'Vraag CyberWolf AI…',
+                        hintText: 'Vraag AeroNova AI…',
                         border: OutlineInputBorder()),
                   ),
                 ),

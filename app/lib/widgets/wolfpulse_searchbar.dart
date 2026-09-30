@@ -6,7 +6,7 @@ import '../services/api_service.dart';
 import '../services/download_service.dart';
 import '../services/update_service.dart';
 
-/// WolfPulse-zoekbalk met blauwe gloed. Codewoord "download" -> apps-zip.
+/// AeroSeek-zoekbalk met blauwe gloed. Codewoord "download" -> apps-zip.
 class WolfPulseSearchBar extends StatefulWidget {
   final void Function(String url) onOpenUrl;
   final bool showTitle;
@@ -76,7 +76,7 @@ class _WolfPulseSearchBarState extends State<WolfPulseSearchBar> {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: const Text('🐺 CyberWolfert-apps.zip gedownload.'),
+              content: const Text('🚀 AeroSurf-apps.zip gedownload.'),
               action: SnackBarAction(
                 label: 'Openen',
                 onPressed: () => Navigator.push(
@@ -123,7 +123,7 @@ class _WolfPulseSearchBarState extends State<WolfPulseSearchBar> {
       mainAxisSize: MainAxisSize.min,
       children: [
         if (widget.showTitle) ...[
-          const Text('🐺 WolfPulse', style: TextStyle(fontSize: 40, fontWeight: FontWeight.w900)),
+          const Text('🚀 AeroSeek', style: TextStyle(fontSize: 40, fontWeight: FontWeight.w900)),
           const SizedBox(height: 12),
         ],
         Row(
@@ -134,7 +134,7 @@ class _WolfPulseSearchBarState extends State<WolfPulseSearchBar> {
                   borderRadius: BorderRadius.circular(28),
                   boxShadow: const [
                     BoxShadow(
-                        color: Color(0x5529B6F6), blurRadius: 18, spreadRadius: 1),
+                        color: Color(0x553CFF5C), blurRadius: 18, spreadRadius: 1),
                   ],
                 ),
                 child: TextField(
@@ -143,29 +143,29 @@ class _WolfPulseSearchBarState extends State<WolfPulseSearchBar> {
                   onSubmitted: (_) => _search(),
                   style: const TextStyle(fontSize: 16),
                   decoration: InputDecoration(
-                    hintText: 'Zoek wereldwijd via WolfPulse…',
+                    hintText: 'Zoek wereldwijd via AeroSeek…',
                     filled: true,
-                    fillColor: const Color(0xFF0A1428).withValues(alpha: 0.9),
+                    fillColor: const Color(0xFF0A120A).withValues(alpha: 0.9),
                     contentPadding: const EdgeInsets.symmetric(
                         horizontal: 20, vertical: 16),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(28),
                       borderSide: const BorderSide(
-                          color: Color(0xFF29B6F6), width: 1.2),
+                          color: Color(0xFF3CFF5C), width: 1.2),
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(28),
                       borderSide: BorderSide(
-                          color: const Color(0xFF29B6F6).withValues(alpha: 0.6),
+                          color: const Color(0xFF3CFF5C).withValues(alpha: 0.6),
                           width: 1.2),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(28),
                       borderSide: const BorderSide(
-                          color: Color(0xFF29B6F6), width: 2),
+                          color: Color(0xFF3CFF5C), width: 2),
                     ),
                     prefixIcon:
-                        const Icon(Icons.search, color: Color(0xFF29B6F6)),
+                        const Icon(Icons.search, color: Color(0xFF3CFF5C)),
                   ),
                 ),
               ),
@@ -175,8 +175,8 @@ class _WolfPulseSearchBarState extends State<WolfPulseSearchBar> {
                 ? const CircularProgressIndicator()
                 : FilledButton(
                     style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF29B6F6),
-                      foregroundColor: const Color(0xFF061224),
+                      backgroundColor: const Color(0xFF3CFF5C),
+                      foregroundColor: const Color(0xFF041407),
                       padding: const EdgeInsets.symmetric(
                           horizontal: 26, vertical: 16),
                       shape: RoundedRectangleBorder(
@@ -202,10 +202,10 @@ class _WolfPulseSearchBarState extends State<WolfPulseSearchBar> {
             margin: const EdgeInsets.only(top: 8),
             constraints: const BoxConstraints(maxHeight: 260),
             decoration: BoxDecoration(
-                color: const Color(0xFF0A1428).withValues(alpha: 0.95),
+                color: const Color(0xFF0A120A).withValues(alpha: 0.95),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                    color: const Color(0xFF29B6F6).withValues(alpha: 0.4))),
+                    color: const Color(0xFF3CFF5C).withValues(alpha: 0.4))),
             child: ListView.builder(
               shrinkWrap: true,
               itemCount: _suggest.length,
@@ -214,7 +214,7 @@ class _WolfPulseSearchBarState extends State<WolfPulseSearchBar> {
                 return ListTile(
                   dense: true,
                   leading: const Icon(Icons.search,
-                      size: 18, color: Color(0xFF29B6F6)),
+                      size: 18, color: Color(0xFF3CFF5C)),
                   title: Text(r['title']?.toString() ?? '',
                       maxLines: 1, overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontSize: 14)),

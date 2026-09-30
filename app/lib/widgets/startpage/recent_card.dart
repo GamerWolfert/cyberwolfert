@@ -48,7 +48,7 @@ class RecentCardState extends State<RecentCard> {
           ..._items.map((e) => ListTile(
                 dense: true,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-                leading: const Icon(Icons.history, size: 18, color: Color(0xFF29B6F6)),
+                leading: const Icon(Icons.history, size: 18, color: Color(0xFF3CFF5C)),
                 title: Text(e.title, maxLines: 1, overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontSize: 13)),
                 onTap: () => widget.onOpen(e.url),

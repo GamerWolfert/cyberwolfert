@@ -291,7 +291,7 @@ async function handleCmd(line, st, sock) {
       write(sock, '252 Kan adressen niet verifiëren');
       return;
     case 'HELP':
-      write(sock, '214 CyberWolfert mailserver');
+      write(sock, '214 AeroSurf mailserver');
       return;
     case 'QUIT':
       write(sock, '221 2.0.0 Bye');
@@ -338,7 +338,7 @@ function handleConn(sock) {
   sock.setEncoding('utf8');
   sock.setTimeout(120000, () => sock.destroy());
   const st = { buf: '', mode: 'cmd', from: null, tos: [], data: '', chain: Promise.resolve() };
-  write(sock, `220 ${HOSTNAME} ESMTP CyberWolfert klaar`);
+  write(sock, `220 ${HOSTNAME} ESMTP AeroSurf klaar`);
 
   sock.on('data', (chunk) => {
     st.buf += chunk;

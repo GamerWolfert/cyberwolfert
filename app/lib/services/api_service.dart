@@ -137,7 +137,7 @@ class ApiService {
     }
   }
 
-  // --- Generiek (voor WolfSyn e.a.) ---
+  // --- Generiek (voor AeroTalk e.a.) ---
   Future<dynamic> apiGet(String path) => _guard('Laden', () async {
         final r = await http.get(Uri.parse('$base$path'), headers: await _h());
         if (r.statusCode != 200) throw Exception(_apiFout(r.body));
@@ -186,7 +186,7 @@ class ApiService {
       });
 
   Future<String> askAi(String message, List<Map<String, String>> history) =>
-      _guard('CyberWolf AI', () async {
+      _guard('AeroNova AI', () async {
         final r = await http.post(Uri.parse('$base/ai/chat'),
             headers: await _h(json: true),
             body: jsonEncode({'message': message, 'history': history}));
@@ -197,7 +197,7 @@ class ApiService {
 
   Future<String> askAiWithImage(
       String message, List<Map<String, String>> history, String imagePath) =>
-      _guard('CyberWolf AI', () async {
+      _guard('AeroNova AI', () async {
         final req = http.MultipartRequest('POST', Uri.parse('$base/ai/chat'));
         req.headers.addAll(await _h());
         req.fields['message'] = message;

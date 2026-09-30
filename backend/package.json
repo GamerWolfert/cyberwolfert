@@ -1,7 +1,7 @@
 {
   "name": "cyberwolfert-backend",
   "version": "1.8.0",
-  "description": "Backend voor CyberWolfert Browser + WolfPulse + CyberWolf AI (Mini-PC + tunnel-ready)",
+  "description": "Backend voor AeroSurf Browser + AeroSeek + AeroNova AI (Mini-PC + tunnel-ready)",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",

@@ -8,7 +8,7 @@ import '../services/sound_service.dart';
 class BackgroundMenu extends StatefulWidget {
   const BackgroundMenu({super.key});
 
-  static const presetColors = ['#0B1020', '#1A1A2E', '#16213E', '#0F3460', '#E63946', '#2A9D8F'];
+  static const presetColors = ['#050805', '#1A1A2E', '#16213E', '#0F3460', '#3CFF5C', '#2A9D8F'];
   static const presetThemes = ['wolf-dark', 'pulse-red', 'midnight'];
 
   @override

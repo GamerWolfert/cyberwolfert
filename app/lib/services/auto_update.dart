@@ -35,7 +35,7 @@ class AutoUpdate {
       final doen = await showDialog<bool>(
         context: context,
         builder: (_) => AlertDialog(
-          title: const Text('🐺 Automatische update'),
+          title: const Text('🚀 Automatische update'),
           content: Text('$versie is klaar.\n\n${current['notes'] ?? ''}\n\nDownloaden en installeren?'),
           actions: [
             TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Later')),
@@ -56,7 +56,7 @@ class AutoUpdate {
       final doen = await showDialog<bool>(
         context: context,
         builder: (_) => AlertDialog(
-          title: const Text('🐺 Update beschikbaar'),
+          title: const Text('🚀 Update beschikbaar'),
           content: Text('$versie is klaar.\n\n${current['notes'] ?? ''}\n\nDownload openen? (Daarna zip uitpakken en opnieuw starten.)'),
           actions: [
             TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Later')),
@@ -79,7 +79,7 @@ class AutoUpdate {
       context: context,
       barrierDismissible: false,
       builder: (_) => AlertDialog(
-        title: const Text('🐺 Update downloaden'),
+        title: const Text('🚀 Update downloaden'),
         content: ValueListenableBuilder<double>(
           valueListenable: progress,
           builder: (_, v, __) => Column(
@@ -132,7 +132,7 @@ class AutoUpdate {
             'Je huidige installatie heeft een andere tekening dan de nieuwe APK. '
             'Met de knop hieronder regelen we dat in één keer:\n\n'
             '1. De APK wordt naar je Downloadmap gedownload (blijft bewaard).\n'
-            '2. Android vraagt of CyberWolfert verwijderd mag worden → tik op Verwijderen.\n'
+            '2. Android vraagt of AeroSurf verwijderd mag worden → tik op Verwijderen.\n'
             '3. Tik op de melding "Download voltooid" en installeer.\n\n'
             'Waarschuwt Play Protect? Tik op Details → Toch installeren. '
             'Daarna updaten normaal vanuit de app.'),
@@ -205,7 +205,7 @@ class AutoUpdate {
             '2. Tik op "Toch installeren".\n\n'
             'Wordt het toch geblokkeerd? Zet Play Protect even uit (Play Store → je profiel → '
             'Play Protect → scans uitschakelen), installeer de update en zet het daarna weer aan.\n\n'
-            'Staat er "App niet geïnstalleerd"? Verwijder eerst de oude CyberWolfert-app, '
+            'Staat er "App niet geïnstalleerd"? Verwijder eerst de oude AeroSurf-app, '
             'installeer de APK opnieuw en log daarna gewoon weer in.'),
         actions: [
           TextButton(

@@ -47,21 +47,21 @@ class _WolfPainter extends CustomPainter {
     canvas.drawPath(
         head,
         Paint()
-          ..color = const Color(0xFF29B6F6)
+          ..color = const Color(0xFF3CFF5C)
           ..style = PaintingStyle.stroke
           ..strokeWidth = s * 0.022
           ..strokeJoin = StrokeJoin.round);
     canvas.drawPath(
         head,
         Paint()
-          ..color = const Color(0xFF29B6F6).withValues(alpha: 0.18)
+          ..color = const Color(0xFF3CFF5C).withValues(alpha: 0.18)
           ..style = PaintingStyle.stroke
           ..strokeWidth = s * 0.05
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8));
 
-    final eyePaint = Paint()..color = const Color(0xFF4DD0FF);
+    final eyePaint = Paint()..color = const Color(0xFF7CFFB0);
     final eyeGlow = Paint()
-      ..color = const Color(0xFF4DD0FF).withValues(alpha: 0.5)
+      ..color = const Color(0xFF7CFFB0).withValues(alpha: 0.5)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
     final leftEye = Path()
       ..moveTo(0.28, 0.50)
@@ -80,7 +80,7 @@ class _WolfPainter extends CustomPainter {
       canvas.drawPath(e, eyePaint);
     }
     canvas.drawCircle(
-        p(0.50, 0.86), s * 0.035, Paint()..color = const Color(0xFF0B1020));
+        p(0.50, 0.86), s * 0.035, Paint()..color = const Color(0xFF050805));
   }
 
   @override
