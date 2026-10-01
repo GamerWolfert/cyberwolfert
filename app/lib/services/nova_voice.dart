@@ -119,6 +119,7 @@ class NovaVoice extends ChangeNotifier {
     // App "wakker" houden zodat Hey Nova ook na het minimaliseren blijft
     // werken (foreground service met microfoontoegang, Android).
     await VoicePlatform.keepAlive(on: true);
+    await VoicePlatform.refresh();
     _setStatus(NovaVoiceStatus.listening);
     _note('gestart');
     _listen();
@@ -139,6 +140,7 @@ class NovaVoice extends ChangeNotifier {
       await _tts.stop();
     } catch (_) {}
     await VoicePlatform.keepAlive(on: false);
+    _inited = false; // bij herstart opnieuw initialiseren (schone sessie)
     final p = await SharedPreferences.getInstance();
     await p.setBool(_onKey, false);
     _setStatus(NovaVoiceStatus.off);
@@ -154,25 +156,42 @@ class NovaVoice extends ChangeNotifier {
 
   // --- luisteren -----------------------------------------------------------
 
+  /// Of de achtergronddienst nu draait (diagnose in de kaart).
+  bool get serviceRunning => VoicePlatform.serviceRunning;
+
   void _listen() {
     if (!enabled || _processing || _active) return;
     _active = true;
+    // Dienst controleren/herstarten: Android kan de foreground-service
+    // stil doodmaken (accu-optimalisatie) — dan draait Hey Nova niet meer.
+    unawaited(VoicePlatform.ensureAlive());
     try {
       _stt.listen(
         onResult: _onResult,
         listenOptions: SpeechListenOptions(
-          listenFor: const Duration(seconds: 60),
-          pauseFor: const Duration(seconds: 6),
+          // Lange sessie met redelijke spreekpauze: minder heen-en-weer
+          // (elke herstart pakt de microfoon opnieuw).
+          listenFor: const Duration(minutes: 5),
+          pauseFor: const Duration(seconds: 10),
           partialResults: true,
-          listenMode: ListenMode.dictation,
+          // Search-modus reageert sneller op korte zinnen zoals "Hey Nova".
+          listenMode: ListenMode.search,
           cancelOnError: false,
         ),
       );
       _note('luistert');
+      _refreshDiag();
     } catch (_) {
       _active = false;
       _scheduleRestart();
     }
+  }
+
+  /// Achtergronddienst-status ophalen en de kaart verversen (diagnose).
+  void _refreshDiag() {
+    VoicePlatform.refresh().then((_) {
+      if (enabled) notifyListeners();
+    }).catchError((_) {});
   }
 
   /// Na elke sessie opnieuw gaan luisteren (één herstart tegelijk).
@@ -246,7 +265,10 @@ class NovaVoice extends ChangeNotifier {
   void _onResult(SpeechRecognitionResult r) {
     if (!enabled || _processing) return;
     final text = _textOf(r);
-    if (text.isEmpty) return;
+    if (text.isEmpty) {
+      _note('leeg resultaat (${r.finalResult ? 'eind' : 'tussentijds'})');
+      return;
+    }
     _note('gehoord: $text');
     final norm = _norm(text);
 

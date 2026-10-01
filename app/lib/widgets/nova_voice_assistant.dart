@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/nova_voice.dart';
+import '../services/update_service.dart';
 
 /// Zwevende Hey Nova-knop (linksonder) met een statuskaart erboven:
 /// wakewoord aan/uit, live-getranscribeerde vraag, antwoord en foutmelding.
@@ -15,6 +16,7 @@ class NovaVoiceAssistant extends StatefulWidget {
 class _NovaVoiceAssistantState extends State<NovaVoiceAssistant> {
   final NovaVoice _nova = NovaVoice.instance;
   bool _cardOpen = false;
+  bool _manual = false; // kaart handmatig opengezet (diagnose)
 
   @override
   void initState() {
@@ -42,6 +44,7 @@ class _NovaVoiceAssistantState extends State<NovaVoiceAssistant> {
       _cardOpen = true;
     }
     if (_cardOpen &&
+        !_manual &&
         s == NovaVoiceStatus.listening &&
         _nova.answer.isEmpty &&
         _nova.error.isEmpty &&
@@ -83,23 +86,31 @@ class _NovaVoiceAssistantState extends State<NovaVoiceAssistant> {
       shape: const CircleBorder(),
       child: InkWell(
         customBorder: const CircleBorder(),
+        // Tikken: aan/uit. Lang ingedrukt houden: diagnosetekst tonen.
         onTap: busy ? null : _nova.toggle,
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: busy
-              ? SizedBox(
-                  width: 26,
-                  height: 26,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.5,
-                    color: on ? cs.onPrimary : cs.primary,
+        onLongPress: () => setState(() {
+          _manual = !_cardOpen;
+          _cardOpen = !_cardOpen;
+        }),
+        child: Tooltip(
+          message: 'Hey Nova aan/uit — lang ingedrukt houden = diagnose',
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: busy
+                ? SizedBox(
+                    width: 26,
+                    height: 26,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      color: on ? cs.onPrimary : cs.primary,
+                    ),
+                  )
+                : Icon(
+                    on ? Icons.mic : Icons.mic_none,
+                    size: 26,
+                    color: on ? cs.onPrimary : cs.onSurfaceVariant,
                   ),
-                )
-              : Icon(
-                  on ? Icons.mic : Icons.mic_none,
-                  size: 26,
-                  color: on ? cs.onPrimary : cs.onSurfaceVariant,
-                ),
+          ),
         ),
       ),
     );
@@ -171,12 +182,16 @@ class _NovaVoiceAssistantState extends State<NovaVoiceAssistant> {
             ),
             const SizedBox(height: 5),
             body,
-            if (_nova.debug.isNotEmpty)
+            if (_nova.enabled)
+              // Diagnose: welke build, of de achtergronddienst draait en wat
+              // de herkenner de laatste keer deed (belangrijk bij storing).
               Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
-                  _nova.debug,
-                  maxLines: 1,
+                  'build ${UpdateService.currentBuild} · '
+                  'dienst ${_nova.serviceRunning ? "aan" : "UIT"} · '
+                  'mic ${_nova.debug.isEmpty ? '—' : _nova.debug}',
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       fontSize: 10.5, color: Colors.white38),
@@ -190,6 +205,7 @@ class _NovaVoiceAssistantState extends State<NovaVoiceAssistant> {
                 tooltip: 'Sluiten',
                 onPressed: () {
                   _nova.clear();
+                  _manual = false;
                   setState(() => _cardOpen = false);
                 },
               ),

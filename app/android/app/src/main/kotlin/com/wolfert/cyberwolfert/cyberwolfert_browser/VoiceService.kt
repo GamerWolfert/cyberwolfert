@@ -18,6 +18,7 @@ class VoiceService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        running = true
         val channelId = "aeroactive"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val nm = getSystemService(NotificationManager::class.java)
@@ -63,5 +64,16 @@ class VoiceService : Service() {
             }
         }
         return START_STICKY
+    }
+
+    override fun onDestroy() {
+        running = false
+        super.onDestroy()
+    }
+
+    companion object {
+        /** Draait de dienst nu? (voor de diagnosetekst in de app). */
+        @Volatile
+        var running: Boolean = false
     }
 }

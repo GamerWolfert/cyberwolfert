@@ -46,6 +46,7 @@ class MainActivity : FlutterActivity() {
                             result.error("stop", e.message, null)
                         }
                     }
+                    "running" -> result.success(VoiceService.running)
                     "vibrate" -> {
                         val ms = (call.argument<Number>("ms") ?: 300).toLong()
                         try {
