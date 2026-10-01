@@ -210,7 +210,7 @@ class NovaVoice extends ChangeNotifier {
     _scheduleRestart();
   }
 
-  void _onError(dynamic err) {
+  Future<void> _onError(dynamic err) async {
     final code = '${err?.errorCode ?? ''}';
     _active = false;
     _note('fout $code');
@@ -218,6 +218,7 @@ class NovaVoice extends ChangeNotifier {
       _error = 'Microfoontoegang geweigerd.';
       _awake = false;
       _processing = false;
+      await VoicePlatform.keepAlive(on: false);
       _setStatus(NovaVoiceStatus.off);
       return;
     }
