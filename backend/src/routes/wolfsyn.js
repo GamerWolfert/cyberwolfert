@@ -427,7 +427,7 @@ router.delete('/servers/:id/channels/:cid', async (req, res) => {
 router.put('/servers/:id/channels/:cid', async (req, res) => {
   if (!(await canDo(req.userId, req.params.id, 'manage'))) {
     return res.status(403).json({ error: 'geen recht' });
-  });
+  }
   const cur = await db.query('SELECT * FROM ws_channels WHERE id=$1 AND server_id=$2', [
     req.params.cid,
     req.params.id,
@@ -578,6 +578,61 @@ router.get('/inbox', async (req, res) => {
     out.push({ user: u.rows[0], last: row.body, at: row.created_at });
   }
   res.json(out);
+});
+
+// Gesprekken (bellen): laatste 40 met partner-profiel + of het gemist is.
+router.get('/calls', async (req, res) => {
+  const r = await db.query(
+    `SELECT id, caller_id, callee_id, kind, started_at, ended_at, end_reason,
+            duration_sec, read_at,
+            (caller_id=$1) AS uitgaand,
+            CASE WHEN caller_id=$1 THEN callee_id ELSE caller_id END AS partner
+       FROM ws_calls
+      WHERE caller_id=$1 OR callee_id=$1
+      ORDER BY id DESC LIMIT 40`,
+    [req.userId]
+  );
+  const cache = new Map();
+  const out = [];
+  for (const row of r.rows) {
+    if (!cache.has(row.partner)) {
+      const u = await db.query(
+        `SELECT u.id, u.username, COALESCE(p.display_name, u.display_name, u.username) AS display,
+                COALESCE(p.avatar_url, u.avatar_url) AS avatar,
+                (u.last_seen > NOW() - interval '60 seconds') AS online
+           FROM users u LEFT JOIN ws_profiles p ON p.user_id=u.id WHERE u.id=$1`,
+        [row.partner]
+      );
+      cache.set(row.partner, u.rows[0] || null);
+    }
+    const inkomend = !row.uitgaand;
+    const nietOpgenomen = !row.ended_at || row.end_reason === 'missed' || row.end_reason === 'rejected';
+    out.push({
+      id: row.id,
+      partner: cache.get(row.partner),
+      uitgaand: row.uitgaand,
+      kind: row.kind,
+      gestart: row.started_at,
+      geëindigd: row.ended_at,
+      reden: row.end_reason,
+      duur: row.duration_sec,
+      gemist: inkomend && nietOpgenomen && !row.read_at,
+    });
+  }
+  res.json(out);
+});
+
+// Gemiste gesprekken van een partner als gelezen markeren.
+router.post('/calls/read', async (req, res) => {
+  const partner = Number(req.body?.partner);
+  if (!partner) return res.status(400).json({ error: 'bad_partner' });
+  await db.query(
+    `UPDATE ws_calls SET read_at=NOW()
+      WHERE callee_id=$1 AND caller_id=$2 AND read_at IS NULL
+        AND (ended_at IS NULL OR end_reason IN ('missed','rejected'))`,
+    [req.userId, partner]
+  );
+  res.json({ ok: true });
 });
 
 // --- Vrienden (zoals Discord) ---

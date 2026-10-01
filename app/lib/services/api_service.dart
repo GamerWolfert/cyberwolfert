@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/constants.dart';
 import '../providers/auth_provider.dart';
+import 'recent_service.dart';
 
 /// Alle netwerkcalls naar de backend (token automatisch mee, nooit adressen in fouten).
 ///
@@ -253,11 +254,26 @@ class ApiService {
         return jsonDecode(r.body) as Map<String, dynamic>;
       });
 
+  /// Browsergeschiedenis (RecentService) meesturen zodat AeroNova weet
+  /// wat je onlangs geopend hebt. Leeg bij fouten.
+  Future<List<Map<String, String>>> _recent() async {
+    try {
+      final items = await RecentService.load();
+      return items
+          .map((e) => {'title': e.title, 'url': e.url, 'time': e.time})
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
   Future<String> askAi(String message, List<Map<String, String>> history) =>
       _guard('AeroNova AI', () async {
+        final recent = await _recent();
         final r = await http.post(Uri.parse('$base/ai/chat'),
             headers: await _h(json: true),
-            body: jsonEncode({'message': message, 'history': history}));
+            body: jsonEncode(
+                {'message': message, 'history': history, 'recent': recent}));
         final j = jsonDecode(r.body) as Map<String, dynamic>;
         if (r.statusCode != 200) throw Exception('bad status');
         return (j['reply'] ?? '') as String;

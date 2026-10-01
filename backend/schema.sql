@@ -343,3 +343,18 @@ CREATE TABLE IF NOT EXISTS ws_boosts (
   PRIMARY KEY (server_id, user_id)
 );
 ALTER TABLE ws_servers ADD COLUMN IF NOT EXISTS banner_color VARCHAR(16) DEFAULT '#3CFF5C';
+
+-- AeroTalk-gesprekken (bellen): log van oproepen -> "gemist" in de DM-balk.
+CREATE TABLE IF NOT EXISTS ws_calls (
+  id SERIAL PRIMARY KEY,
+  caller_id INT REFERENCES users(id) ON DELETE SET NULL,
+  callee_id INT REFERENCES users(id) ON DELETE SET NULL,
+  kind VARCHAR(16) NOT NULL DEFAULT 'video',
+  started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ended_at TIMESTAMPTZ,
+  end_reason VARCHAR(32),
+  duration_sec INT NOT NULL DEFAULT 0,
+  read_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_ws_calls_callee ON ws_calls (callee_id, id DESC);
+CREATE INDEX IF NOT EXISTS idx_ws_calls_pair ON ws_calls (LEAST(caller_id, callee_id), GREATEST(caller_id, callee_id), id DESC);

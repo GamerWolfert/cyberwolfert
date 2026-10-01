@@ -2,6 +2,7 @@
 // rate-limit op /api, uploads + Flutter-web hosting + Discord presence.
 // Config: backend/config.env (kopie van .env.example).
 require('dotenv').config({ path: require('path').join(__dirname, '..', 'config.env') });
+const http = require('http');
 const path = require('path');
 const fs = require('fs');
 const express = require('express');
@@ -22,6 +23,7 @@ const gifsRouter = require('./routes/gifs');
 const { authOptional } = require('./auth');
 const { pool } = require('./db');
 const { startSmtp } = require('./smtp');
+const { startCalls } = require('./calls');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -184,9 +186,11 @@ function startPresence() {
   link();
 }
 
-app.listen(PORT, HOST, () => {
+const server = http.createServer(app);
+server.listen(PORT, HOST, () => {
   console.log(`[AeroSurf] backend live op http://${HOST}:${PORT}`);
   if (process.env.PUBLIC_URL) console.log(`[AeroSurf] publiek via tunnel: ${process.env.PUBLIC_URL}`);
+  startCalls(server);
   startPresence();
   startSmtp();
   const { startUrlWatch } = require('./url_watch');

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../services/call_service.dart';
 import '../services/wolfsyn_service.dart';
 import '../widgets/app_logo.dart';
 import '../widgets/gif_message.dart';
@@ -1922,6 +1923,7 @@ class _DmScreenState extends State<DmScreen> {
   Timer? _poll;
   Timer? _tick;
   int? _me;
+  int _gemist = 0;
 
   @override
   void initState() {
@@ -1930,6 +1932,7 @@ class _DmScreenState extends State<DmScreen> {
       if (mounted) setState(() => _me = (p['id'] as num?)?.toInt());
     });
     _load();
+    _loadCalls();
     _poll = Timer.periodic(const Duration(seconds: 4), (_) {
       if (mounted) _load();
     });
@@ -1954,6 +1957,26 @@ class _DmScreenState extends State<DmScreen> {
     try {
       final m = await _api.dms(widget.userId);
       if (mounted) setState(() => _messages = m);
+    } catch (_) {}
+  }
+
+  /// Gemiste gesprekken van deze partner tellen (en daarna als gelezen
+  /// markeren zodat de teller niet blijft hangen).
+  Future<void> _loadCalls() async {
+    try {
+      final rows = await _api.calls();
+      final n = rows
+          .where((r) =>
+              r is Map &&
+              r['gemist'] == true &&
+              ((r['partner'] ?? {})['id'] as num?)?.toInt() == widget.userId)
+          .length;
+      if (mounted && n > 0) {
+        setState(() => _gemist = n);
+        _api.readCalls(widget.userId);
+      } else if (mounted) {
+        setState(() => _gemist = 0);
+      }
     } catch (_) {}
   }
 
@@ -2010,9 +2033,50 @@ class _DmScreenState extends State<DmScreen> {
           Text(widget.online ? 'online' : 'offline',
               style: const TextStyle(fontSize: 11, color: Colors.white54)),
         ]),
+        actions: [
+          IconButton(
+            tooltip: 'Audio-gesprek',
+            icon: const Icon(Icons.call, size: 22),
+            onPressed: () => CallService.instance.invite(widget.userId, 'audio'),
+          ),
+          IconButton(
+            tooltip: 'Video-gesprek',
+            icon: const Icon(Icons.videocam, size: 22),
+            onPressed: () => CallService.instance.invite(widget.userId, 'video'),
+          ),
+          IconButton(
+            tooltip: 'Scherm delen',
+            icon: const Icon(Icons.screen_share, size: 22),
+            onPressed: () => CallService.instance.invite(widget.userId, 'screen'),
+          ),
+        ],
       ),
       body: Column(
         children: [
+          if (_gemist > 0)
+            Material(
+              color: const Color(0x8CC11211),
+              child: InkWell(
+                onTap: _loadCalls,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 7),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.call_missed, size: 16, color: Colors.redAccent),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '$_gemist gemist(e) gesprek(ken) van ${widget.name}',
+                          style: const TextStyle(fontSize: 12.5),
+                        ),
+                      ),
+                      const Icon(Icons.close, size: 16, color: Colors.white54),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.all(12),

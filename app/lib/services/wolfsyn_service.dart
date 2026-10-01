@@ -94,6 +94,13 @@ class WolfSynService {
   Future<Map<String, dynamic>> sendDm(int userId, String body) async =>
       (await _api.apiPost('/wolf/dms/$userId', {'body': body})) as Map<String, dynamic>;
 
+  // --- Gesprekken (bellen) ---
+  Future<List<dynamic>> calls() async =>
+      (await _api.apiGet('/wolf/calls')) as List<dynamic>;
+
+  Future<void> readCalls(int partner) async =>
+      _api.apiPost('/wolf/calls/read', {'partner': partner});
+
   Future<Map<String, dynamic>> profile() async =>
       (await _api.apiGet('/wolf/profile')) as Map<String, dynamic>;
 

@@ -86,4 +86,4 @@ async function effectiveUserId(req) {
   }
 }
 
-module.exports = { signToken, authOptional, authRequired, effectiveUserId };
+module.exports = { signToken, authOptional, authRequired, effectiveUserId, userIdFromToken };

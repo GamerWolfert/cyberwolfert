@@ -26,7 +26,9 @@
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>AeroSurf gebruikt je locatie alleen voor het live weer op de startpagina.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Hey Nova gebruikt de microfoon om je vraag aan AeroNova te stellen.</string>
+	<string>Hey Nova en AeroTalk-gesprekken gebruiken de microfoon.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>AeroTalk-gesprekken gebruiken de camera voor video en schermdelen.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Hey Nova zet je spraak om in tekst zodat AeroNova je vraag kan beantwoorden.</string>
 	<key>CFBundlePackageType</key>

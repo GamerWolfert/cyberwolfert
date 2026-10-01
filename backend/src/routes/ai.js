@@ -87,7 +87,7 @@ async function ollamaChat(messages, codeMode) {
     : (process.env.OLLAMA_MODEL || 'qwen2.5:1.5b');
   const opts = codeMode
     ? { num_predict: 1600, temperature: 0.15, top_p: 0.9, num_ctx: 4096, repeat_penalty: 1.05, keep_alive: '15m' }
-    : { num_predict: 220, temperature: 0.3, top_p: 0.9, num_ctx: 2048, repeat_penalty: 1.1, keep_alive: '5m' };
+    : { num_predict: 220, temperature: 0.3, top_p: 0.9, num_ctx: 4096, repeat_penalty: 1.1, keep_alive: '5m' };
 
   // Kleine modellen volgen de LAATSTE instructie het best: stijlregel achteraan.
   const styled = messages.map((mm) => ({ ...mm }));
@@ -189,6 +189,114 @@ async function getMemory(uid) {
     } catch (_) {}
   }
   return readFileMemory()[String(uid ?? 'gast')] || [];
+}
+
+// Wie is de gebruiker? Naam, e-mail, admin, vrienden, servers, mailboxen,
+// recente zoekopdrachten en laatste AI-gesprekken -> kort blok voor de prompt.
+async function profileContext(uid, alsPrompt = true) {
+  if (!uid) {
+    return alsPrompt
+      ? '\nJe praat met een gast (niet ingelogd): je weet niets over een account.'
+      : 'Je bent niet ingelogd, dus ik ken je account nog niet.';
+  }
+  const q = async (sql, args) => {
+    try {
+      const r = await db.query(sql, args);
+      return r.rows;
+    } catch (_) {
+      return [];
+    }
+  };
+  const [u] = await q(
+    'SELECT username, display_name, email, email_verified, is_admin, created_at FROM users WHERE id=$1',
+    [uid]
+  );
+  if (!u) return '';
+  const [friends, servers, owned, boxes, searches, chats, groups] = await Promise.all([
+    q(
+      `SELECT COALESCE(p.display_name, f.display_name, uf.username) AS naam, uf.username
+         FROM ws_friends fr
+         JOIN users uf ON uf.id = fr.friend_id
+         LEFT JOIN ws_profiles p ON p.user_id = uf.id
+         LEFT JOIN users f ON f.id = uf.id
+        WHERE fr.user_id=$1 LIMIT 15`,
+      [uid]
+    ),
+    q(
+        `SELECT DISTINCT s.name FROM ws_members m JOIN ws_servers s ON s.id=m.server_id
+        WHERE m.user_id=$1 ORDER BY s.name LIMIT 12`,
+      [uid]
+    ),
+    q('SELECT DISTINCT name FROM ws_servers WHERE owner_id=$1 ORDER BY name LIMIT 12', [uid]),
+    q(
+      `SELECT LOWER(mb.localpart) || '@' || LOWER(d.domain) AS address
+         FROM mail_mailboxes mb JOIN mail_domains d ON d.id=mb.domain_id
+        WHERE mb.owner_user_id=$1 LIMIT 8`,
+      [uid]
+    ),
+    q('SELECT query FROM search_history WHERE user_id=$1 ORDER BY id DESC LIMIT 8', [uid]),
+    q(
+      `SELECT role, content FROM ai_chats WHERE user_id=$1 ORDER BY id DESC LIMIT 8`,
+      [uid]
+    ),
+    q(
+      `SELECT g.name FROM ws_groups g JOIN ws_group_members gm ON gm.group_id=g.id
+        WHERE gm.user_id=$1 LIMIT 8`,
+      [uid]
+    ),
+  ]);
+
+  const naam = (u.display_name || u.username || '').trim();
+  const regels = [];
+  regels.push(
+    alsPrompt
+      ? `De gebruiker heet ${naam} (username: ${u.username})` +
+          (u.email ? `, e-mail/adres: ${u.email}` : '') +
+          (u.email_verified ? ' (bevestigd)' : '') +
+          `.`
+      : `Jij bent ${naam || u.username} (@${u.username})` +
+          (u.email ? `, e-mail: ${u.email}${u.email_verified ? ' (bevestigd)' : ''}` : '') +
+          `.`
+  );
+  regels.push(
+    u.is_admin
+      ? alsPrompt
+        ? 'Dit is een ADMINISTRATOR van AeroSurf: je mag hem/haar als beheerder aanspreken en admin-acties voorstellen.'
+        : 'Je bent ADMINISTRATOR van AeroSurf.'
+      : alsPrompt
+        ? 'Dit is een gewone gebruiker (geen admin).'
+        : 'Je bent een gewone gebruiker (geen admin).'
+  );
+  if (friends.length) {
+    regels.push(
+      `Vrienden: ${friends.map((f) => `${f.naam || f.username} (@${f.username})`).join(', ')}.`
+    );
+  }
+  const ownedNames = owned.map((s) => s.name);
+  const memberNames = servers.map((s) => s.name).filter((n) => !ownedNames.includes(n));
+  if (ownedNames.length) regels.push(`Eigen servers: ${ownedNames.join(', ')}.`);
+  if (memberNames.length) regels.push(`Servers waar hij/zij in zit: ${memberNames.join(', ')}.`);
+  if (groups.length) regels.push(`Groeps-chats: ${groups.map((g) => g.name).join(', ')}.`);
+  if (boxes.length) {
+    const l = alsPrompt ? 'Zijn/haar mailadressen' : 'Jouw mailadressen';
+    regels.push(`${l}: ${boxes.map((b) => b.address).join(', ')}.`);
+  }
+  const zoekUniek = [...new Set(searches.map((s) => s.query).filter(Boolean))].slice(0, 8);
+  if (zoekUniek.length) {
+    regels.push(`Recent gezocht in AeroSeek: ${zoekUniek.join('; ')}.`);
+  }
+  if (chats.length && alsPrompt) {
+    const laatste = chats
+      .slice()
+      .reverse()
+      .slice(0, 3)
+      .map((c) => `${c.role === 'user' ? 'ik' : 'jij'}: ${String(c.content).slice(0, 90)}`);
+    regels.push(`Eerdere gesprekken (nieuwste eerst): ${laatste.join(' | ')}.`);
+  }
+  if (!regels.length) return alsPrompt ? '' : 'Ik weet nog niets over je account.';
+  return alsPrompt
+    ? `\nOver de gebruiker (gebruik dit als iemand over zichzelf vraagt):\n- ` + regels.join('\n- ')
+    : `Over jouw account weet ik dit:\n• ` + regels.join('\n• ');
 }
 async function saveMemory(uid, feit) {
   if (!feit) return;
@@ -316,9 +424,66 @@ function evalMath(expr) {
   return out;
 }
 
-async function quickReply(message, req) {
+// Snel profiel-antwoord: wie ben ik, mijn e-mail, admin?, vrienden, servers.
+// Uit de database, zonder dat het model hoeft te draaien.
+async function profileQuick(m, req) {
+  const vraag =
+    /\b(wie ben ik|hoe heet ik|wat is mijn naam|wat is mijn e-mail|mijn mailadres|wat is mijn emailadres|ben ik admin|ben ik een admin|welke servers heb ik|wie zijn mijn vrienden|wat is mijn gebruikersnaam)\b/.test(m);
+  if (!vraag) return null;
+  let uid = null;
+  try {
+    uid = await effectiveUserId(req);
+  } catch (_) {}
+  if (!uid) return 'Je bent niet ingelogd, dus ik ken je account nog niet. Log in dan weet ik wie je bent.';
+  let u = null;
+  try {
+    const r = await db.query(
+      'SELECT username, display_name, email, is_admin FROM users WHERE id=$1',
+      [uid]
+    );
+    u = r.rows[0];
+  } catch (_) {}
+  if (!u) return 'Ik kan je account niet vinden.';
 
-  const v = versionInfo();
+  const naam = (u.display_name || u.username || '').trim();
+  if (/welke servers/.test(m) || /wie zijn mijn vrienden/.test(m)) {
+    let regels = [];
+    try {
+      const s = await db.query(
+        'SELECT DISTINCT s.name FROM ws_members m JOIN ws_servers s ON s.id=m.server_id WHERE m.user_id=$1 ORDER BY s.name LIMIT 12',
+        [uid]
+      );
+      const f = await db.query(
+        `SELECT COALESCE(p.display_name, uf.username) AS naam, uf.username
+           FROM ws_friends fr JOIN users uf ON uf.id=fr.friend_id
+           LEFT JOIN ws_profiles p ON p.user_id=uf.id
+          WHERE fr.user_id=$1 LIMIT 15`,
+        [uid]
+      );
+      if (s.rows.length) regels.push(`Servers: ${s.rows.map((x) => x.name).join(', ')}.`);
+      if (f.rows.length) {
+        regels.push(`Vrienden: ${f.rows.map((x) => `${x.naam} (@${x.username})`).join(', ')}.`);
+      }
+    } catch (_) {}
+    if (!regels.length) return `Je zit nog nergens in en hebt nog geen vrienden, ${naam || 'vriend'}.`;
+    return `Je heet ${naam} (@${u.username}).\n- ` + regels.join('\n- ');
+  }
+  if (/admin/.test(m)) {
+    return u.is_admin
+      ? `Ja, ${naam || u.username}, jij bent ADMINISTRATOR van AeroSurf. 🐺`
+      : `Nee, ${naam || u.username}, je bent een gewone gebruiker (geen admin).`;
+  }
+  if (/e-?mail|mailadres/.test(m)) {
+    return u.email
+      ? `Jouw e-mailadres is ${u.email}${u.email_verified ? ' (bevestigd)' : ''}.`
+      : 'Er staat nog geen e-mailadres op je account.';
+  }
+  return `Jij bent ${naam || u.username}, inlognaam "${u.username}".` +
+    (u.email ? ` E-mail: ${u.email}.` : '') +
+    (u.is_admin ? ' Je bent admin.' : '');
+}
+
+async function quickReply(message, req) {  const v = versionInfo();
   const base = process.env.PUBLIC_URL
     ? String(process.env.PUBLIC_URL).replace(/\/$/, '')
     : `${req.protocol}://${req.get('host')}`;
@@ -344,8 +509,11 @@ async function quickReply(message, req) {
   }
   if (m.includes('wie ben je') || m.includes('je naam') || m.includes('welk model') ||
       m.includes('hoe heet je') || m.includes('hoe heet jij') || m.includes('ben jij een ai')) {
-    return 'Ik ben AeroNova AI, de vaste assistent van de AeroSurf Browser. 🚀 Ik draai zelf op jouw Mini-PC.';
+    return 'Ik ben AeroNova AI, de vaste assistent van de AeroSurf Browser. 🐺 Ik draai zelf op jouw Mini-PC.';
   }
+  // Snel antwoord op vragen over HÉM/HAAR (uit account, geen model nodig).
+  const overMij = await profileQuick(m, req);
+  if (overMij) return overMij;
   const naamIs = m.match(/(?:mijn naam is|ik heet|noem me)\s+(.+)/);
   if (naamIs && naamIs[1].trim().length > 1 && naamIs[1].trim().length < 40) {
     const naam = naamIs[1].trim().replace(/\s+(op|naar|eens|even)$/, '').trim();
@@ -381,8 +549,13 @@ async function quickReply(message, req) {
   if (m.includes('wat weet je') || m.includes('wat heb je onthouden') || m.includes('mijn geheugen')) {
     const uid = await effectiveUserId(req);
     const feiten = await getMemory(uid);
-    if (!feiten.length) return 'Ik heb nog niets over je onthouden. Zeg "onthoud dat ..." en ik bewaar het.';
-    return `Dit weet ik van je:\n• ${feiten.join('\n• ')}\n\nZeg "vergeet ..." om iets te wissen.`;
+    let prof = '';
+    try { prof = (await profileContext(uid, false)).trim(); } catch (_) {}
+    const delen = [];
+    if (feiten.length) delen.push(`Onthouden:\n• ${feiten.join('\n• ')}`);
+    if (prof) delen.push(prof);
+    if (!delen.length) return 'Ik heb nog niets over je onthouden. Zeg "onthoud dat ..." en ik bewaar het.';
+    return delen.join('\n\n') + '\n\nZeg "vergeet ..." om iets te wissen.';
   }
   const vergeet = m.match(/vergeet\s+(.+)/);
   if (vergeet && vergeet[1].trim().length > 0) {
@@ -514,22 +687,53 @@ router.post('/chat', uploadAi.single('image'), async (req, res) => {
 
   const codeMode = isCodeAsk(message);
   let memoryLine = '';
+  let profielLine = '';
+  const uid = await effectiveUserId(req).catch(() => null);
   try {
-    const uid = await effectiveUserId(req);
     const feiten = await getMemory(uid);
     if (feiten.length) memoryLine = `\nDingen die je over deze gebruiker weet: ${feiten.join('; ')}.`;
   } catch (_) {}
+  try {
+    profielLine = await profileContext(uid);
+  } catch (_) {}
+
+  // Browsergeschiedenis van de app (RecentService) als die meegestuurd wordt.
+  let recentLine = '';
+  const recent = Array.isArray(req.body?.recent) ? req.body.recent.slice(0, 8) : [];
+  if (recent.length) {
+    const items = recent
+      .map((r) => (typeof r === 'string' ? r : `${r.title || ''} — ${r.url || ''}`.replace(/^ — /, '')))
+      .filter(Boolean);
+    if (items.length) recentLine = `\nRecent geopend in de browser: ${items.join('; ')}.`;
+  }
 
   const ctx = await webContext(message, codeMode);
   const sysFor = (cm) =>
-    IDENTITY + '\n' + STYLE + (cm ? '\n' + CODING : '') + memoryLine + ctx +
+    IDENTITY + '\n' + STYLE + (cm ? '\n' + CODING : '') + profielLine + memoryLine + recentLine + ctx +
     `\nHet is nu ${new Date().toLocaleString('nl-NL')}. AeroSurf ${versionInfo().version}.`;
-  const build = (cm) => [
-    { role: 'system', content: sysFor(cm) },
-    ...(Array.isArray(history) ? history.slice(-10) : []),
-    { role: 'user', content: message },
-  ];
-  const messages = build(codeMode);
+  const build = async (cm) => {
+    // Server-side geheugen: eerdere gesprekken uit ai_chats als de client
+    // met een lege geschiedenis komt (nieuw scherm / herstart).
+    let hist = Array.isArray(history) ? history.slice(-10) : [];
+    if (hist.length < 2) {
+      try {
+        const rows = await db.query(
+          'SELECT role, content FROM ai_chats WHERE user_id=$1 ORDER BY id DESC LIMIT 8',
+          [uid]
+        );
+        if (rows.rows.length) {
+          const oud = rows.rows.reverse().map((r) => ({ role: r.role, content: r.content }));
+          hist = [...oud, ...hist].slice(-10);
+        }
+      } catch (_) {}
+    }
+    return [
+      { role: 'system', content: sysFor(cm) },
+      ...hist,
+      { role: 'user', content: message },
+    ];
+  };
+  const messages = await build(codeMode);
 
   let out = null;
   if (imageB64) {
@@ -557,7 +761,7 @@ router.post('/chat', uploadAi.single('image'), async (req, res) => {
   // Weigering herkennen -> één tweede ronde met de coder en een dwingende regel.
   if (out && !codeMode && isRefusal(out.reply)) {
     try {
-      const force = build(true);
+      const force = await build(true);
       force[force.length - 1] = {
         role: 'user',
         content: `${message}\n\n[Regel: je BIEDT dit altijd aan en levert het ook. Schrijf de code/het script ` +
