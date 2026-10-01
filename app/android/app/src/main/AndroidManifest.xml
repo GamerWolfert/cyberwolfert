@@ -5,6 +5,8 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <!-- Meldingen (berichten/mail) met geluid, ook als de app op de achtergrond draait -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- Inkomend gesprek: melding mag het scherm wakker maken (oproepscherm) -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
     <!-- Hey Nova: microfoon voor spraakherkenning -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
@@ -48,6 +50,13 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- Altijd-aan luisterdienst voor Hey Nova: houdt de app actief
+             (laag battery-verbruik) en luistert op de achtergrond mee. -->
+        <service
+            android:name=".VoiceService"
+            android:exported="false"
+            android:stopWithTask="false"
+            android:foregroundServiceType="microphone" />
     </application>
     <queries>
         <intent>

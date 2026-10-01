@@ -8,6 +8,9 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../providers/auth_provider.dart';
 import 'api_service.dart';
+import 'local_notify.dart';
+import 'sound_service.dart';
+import 'voice_platform.dart';
 
 enum CallStatus { off, outgoing, incoming, active, ended }
 
@@ -41,6 +44,7 @@ class CallService extends ChangeNotifier {
   WebSocketChannel? _ws;
   Timer? _retry;
   Timer? _ping;
+  Timer? _ring; // belussen + trilling bij inkomend gesprek
   int _tries = 0;
   bool _wantWs = false;
   bool _opening = false;
@@ -167,6 +171,19 @@ class CallService extends ChangeNotifier {
         statusText = 'Inkomend gesprek';
         error = null;
         _notify();
+        _startRinging();
+        // Ook als de app op de achtergrond draait: melding met volledig
+        // scherm (bel-intent) zodat het toestel oplicht als een echte oproep.
+        LocalNotify.show(
+          peerName.isEmpty ? 'AeroTalk' : peerName,
+          kind == 'screen'
+              ? 'Inkomend verzoek om scherm te delen'
+              : kind == 'audio'
+                  ? 'Inkomend audiogesprek'
+                  : 'Inkomend videogesprek',
+          call: true,
+          id: LocalNotify.callId,
+        );
         break;
       case 'accepted':
         status = CallStatus.active;
@@ -186,6 +203,7 @@ class CallService extends ChangeNotifier {
         final reden = (m['reason'] ?? '').toString();
         if (status != CallStatus.off) {
           status = CallStatus.ended;
+          _stopRinging();
           if (reden == 'rejected') {
             error = 'Geweigerd door ${peerName.isEmpty ? 'de ander' : peerName}';
           } else if (reden == 'missed') {
@@ -390,6 +408,7 @@ class CallService extends ChangeNotifier {
     startedAt = DateTime.now();
     error = null;
     statusText = null;
+    _stopRinging();
     _notify();
     _send({'t': 'accept', 'call': callId});
     try {
@@ -401,6 +420,7 @@ class CallService extends ChangeNotifier {
   void reject() {
     if (status != CallStatus.incoming) return;
     _send({'t': 'reject', 'call': callId});
+    _stopRinging();
     status = CallStatus.off;
     callId = null;
     _notify();
@@ -409,13 +429,41 @@ class CallService extends ChangeNotifier {
   Future<void> hangup() async {
     if (callId == null) return;
     _send({'t': 'hangup', 'call': callId});
+    _stopRinging();
     await _teardown('hangup');
     status = CallStatus.off;
     callId = null;
     _notify();
   }
 
+  /// Belussen + trilling zolang er niet opgenomen wordt.
+  void _startRinging() {
+    _stopRinging();
+    SoundService.startCallRing();
+    VoicePlatform.ringVibrate();
+    _ring = Timer.periodic(const Duration(milliseconds: 2200), (_) {
+      if (status != CallStatus.incoming) {
+        _stopRinging();
+        return;
+      }
+      VoicePlatform.ringVibrate();
+    });
+  }
+
+  void _stopRinging() {
+    if (_ring == null) {
+      // Toch nog de melding weghalen (bijv. bij een directe 'ended').
+      LocalNotify.cancel(LocalNotify.callId);
+      return;
+    }
+    _ring?.cancel();
+    _ring = null;
+    SoundService.stopCallRing();
+    LocalNotify.cancel(LocalNotify.callId);
+  }
+
   Future<void> _teardown(String reason) async {
+    _stopRinging();
     final pc = _pc;
     _pc = null;
     _pending.clear();

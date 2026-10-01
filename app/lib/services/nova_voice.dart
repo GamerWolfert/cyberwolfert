@@ -7,6 +7,7 @@ import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
 import 'api_service.dart';
+import 'voice_platform.dart';
 
 /// Fase van de Hey Nova-stemassistente.
 enum NovaVoiceStatus {
@@ -35,9 +36,10 @@ class NovaVoice extends ChangeNotifier {
 
   static const _onKey = 'nova_voice_on';
 
-  /// Varianten van het wakewoord, Nederlands en Engels.
+  /// Varianten van het wakewoord, Nederlands en Engels. Ook kaal "nova"
+  /// telt (de herkenner zet "hé nova" soms om in "nova" of "é nova").
   static final _wakeRe = RegExp(
-    r'\b(?:hey|hee|he|hoi|hallo|hello|oke|ok|okay|joh|yo)\s+nova\b',
+    r'\b(?:(?:hey|hee|he|hoi|hallo|hello|oke|ok|okay|oh|joh|yo|aero)\s+)?nova\b',
     caseSensitive: false,
   );
 
@@ -50,10 +52,12 @@ class NovaVoice extends ChangeNotifier {
   bool _awake = false;
   bool _processing = false;
   bool _restarting = false;
+  bool _active = false; // eigen sessievlag (plugin denkt soms nog te luisteren)
   String _heard = '';
   String _question = '';
   String _answer = '';
   String _error = '';
+  String _debug = '';
   Timer? _idleTimer;
   final List<Map<String, String>> _history = [];
 
@@ -71,6 +75,9 @@ class NovaVoice extends ChangeNotifier {
 
   /// Foutmelding (bijv. microfoon geweigerd), leeg als alles oké is.
   String get error => _error;
+
+  /// Laatste gebeurtenis van de herkenner (diagnose in de kaart).
+  String get debug => _debug;
 
   /// Of de assistente bij het openen van de app automatisch moet starten.
   Future<bool> shouldAutoStart() async {
@@ -109,7 +116,11 @@ class NovaVoice extends ChangeNotifier {
     await _prepareTts();
     final p = await SharedPreferences.getInstance();
     await p.setBool(_onKey, true);
+    // App "wakker" houden zodat Hey Nova ook na het minimaliseren blijft
+    // werken (foreground service met microfoontoegang, Android).
+    await VoicePlatform.keepAlive(on: true);
     _setStatus(NovaVoiceStatus.listening);
+    _note('gestart');
     _listen();
   }
 
@@ -118,6 +129,7 @@ class NovaVoice extends ChangeNotifier {
     _awake = false;
     _processing = false;
     _restarting = false;
+    _active = false;
     _heard = '';
     _question = '';
     try {
@@ -126,6 +138,7 @@ class NovaVoice extends ChangeNotifier {
     try {
       await _tts.stop();
     } catch (_) {}
+    await VoicePlatform.keepAlive(on: false);
     final p = await SharedPreferences.getInstance();
     await p.setBool(_onKey, false);
     _setStatus(NovaVoiceStatus.off);
@@ -142,36 +155,53 @@ class NovaVoice extends ChangeNotifier {
   // --- luisteren -----------------------------------------------------------
 
   void _listen() {
-    if (_processing || _stt.isListening) return;
+    if (!enabled || _processing || _active) return;
+    _active = true;
     try {
       _stt.listen(
         onResult: _onResult,
         listenOptions: SpeechListenOptions(
-          listenFor: const Duration(seconds: 25),
-          pauseFor: const Duration(seconds: 5),
+          listenFor: const Duration(seconds: 60),
+          pauseFor: const Duration(seconds: 6),
           partialResults: true,
           listenMode: ListenMode.dictation,
           cancelOnError: false,
         ),
       );
+      _note('luistert');
     } catch (_) {
+      _active = false;
       _scheduleRestart();
     }
   }
 
   /// Na elke sessie opnieuw gaan luisteren (één herstart tegelijk).
-  void _scheduleRestart() {
-    if (!enabled || _processing || _restarting || _stt.isListening) return;
+  /// Ruimt eerst een eventuele "half-dode" sessie van de plugin op.
+  void _scheduleRestart({int delayMs = 350}) {
+    if (!enabled || _processing || _restarting) return;
     _restarting = true;
-    Timer(const Duration(milliseconds: 350), () {
+    Timer(Duration(milliseconds: delayMs), () {
       _restarting = false;
-      if (enabled && !_processing) _listen();
+      if (!enabled || _processing) return;
+      if (_active || _stt.isListening) {
+        try {
+          _stt.cancel();
+        } catch (_) {}
+        _active = false;
+      }
+      _listen();
     });
   }
 
   void _onStatus(String s) {
+    if (s == 'listening') {
+      _active = true;
+      return;
+    }
     if (s != 'notListening' && s != 'done' && s != 'cancelled') return;
+    _active = false;
     if (_processing) return;
+    _note('sessie $s');
     // Sessie voorbij: als de vraag al opgenomen is, die nu verwerken.
     if (_awake && _heard.trim().isNotEmpty) {
       _submit(_heard);
@@ -182,6 +212,8 @@ class NovaVoice extends ChangeNotifier {
 
   void _onError(dynamic err) {
     final code = '${err?.errorCode ?? ''}';
+    _active = false;
+    _note('fout $code');
     if (code == 'error_permission') {
       _error = 'Microfoontoegang geweigerd.';
       _awake = false;
@@ -189,14 +221,32 @@ class NovaVoice extends ChangeNotifier {
       _setStatus(NovaVoiceStatus.off);
       return;
     }
+    if (_processing) return;
     // Geen gedetecteerde spraak of tijdelijke fout: gewoon opnieuw proberen.
-    if (enabled && !_processing) _scheduleRestart();
+    _scheduleRestart(
+        delayMs: code == 'error_speech_timeout' ? 500 : 350);
+  }
+
+  /// Tekst uit het resultaat (sommige toestellen vullen alleen `alternates`).
+  static String _textOf(SpeechRecognitionResult r) {
+    var t = r.recognizedWords.trim();
+    if (t.isEmpty) {
+      for (final a in r.alternates) {
+        final s = a.recognizedWords.trim();
+        if (s.isNotEmpty) {
+          t = s;
+          break;
+        }
+      }
+    }
+    return t;
   }
 
   void _onResult(SpeechRecognitionResult r) {
     if (!enabled || _processing) return;
-    final text = r.recognizedWords.trim();
+    final text = _textOf(r);
     if (text.isEmpty) return;
+    _note('gehoord: $text');
     final norm = _norm(text);
 
     if (!_awake) {
@@ -204,6 +254,7 @@ class NovaVoice extends ChangeNotifier {
       if (m == null) return;
       _awake = true;
       _setStatus(NovaVoiceStatus.heard);
+      VoicePlatform.vibrate(120); // korte trilbevestiging: "ik hoor je"
       final rest = norm.substring(m.end).trim();
       _heard = rest;
       notifyListeners();
@@ -218,6 +269,7 @@ class NovaVoice extends ChangeNotifier {
           _awake = false;
           _heard = '';
           _setStatus(NovaVoiceStatus.listening);
+          _scheduleRestart();
         }
       });
       return;
@@ -265,7 +317,9 @@ class NovaVoice extends ChangeNotifier {
       _heard = '';
       if (enabled) {
         _setStatus(NovaVoiceStatus.listening);
-        _scheduleRestart();
+        // Even wachten na het uitspreken: de microfoon pikkt anders het
+        // eigen antwoord weer op.
+        _scheduleRestart(delayMs: 800);
       } else {
         _setStatus(NovaVoiceStatus.off);
       }
@@ -322,6 +376,11 @@ class NovaVoice extends ChangeNotifier {
       .replaceAll(RegExp(r'[^a-z0-9\s]'), ' ')
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
+
+  /// Laatste gebeurtenis bewaren (kleine regel in de kaart, voor diagnosen).
+  void _note(String s) {
+    _debug = s;
+  }
 
   void _setStatus(NovaVoiceStatus s) {
     _status = s;

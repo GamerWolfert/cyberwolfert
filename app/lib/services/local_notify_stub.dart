@@ -3,6 +3,10 @@
 class LocalNotify {
   static Future<void> init() async {}
 
-  static Future<void> show(String title, String body,
-      {bool call = false}) async {}
+  /// Geeft -1 terug: er is geen systeemmelding, dus het app-geluid spelen.
+  static Future<int> show(String title, String body,
+      {bool call = false, int? id}) async =>
+      -1;
+
+  static Future<void> cancel(int id) async {}
 }

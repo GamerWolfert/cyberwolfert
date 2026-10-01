@@ -6,7 +6,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 import '../services/call_service.dart';
 
 /// AeroTalk-gesprek: alles over elke schermlaag heen (via main.dart).
-/// - inkomend: balk bovenaan met aannemen/weigeren
+/// - inkomend: volledig scherm oproepscherm (naam, aannemen, weigeren)
 /// - uitgaand/actief: volledig scherm met video, bediening en belduur
 class CallOverlay extends StatefulWidget {
   const CallOverlay({super.key});
@@ -110,65 +110,127 @@ class _CallOverlayState extends State<CallOverlay> {
   }
 
   // ------------------------------------------------------------- inkomend
+  /// Volledig scherm: ziet eruit als een echte telefoonoproep
+  /// (naam, soort gesprek, aannemen + weigeren).
   Widget _incoming(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final videoCall = _c.kind != 'audio';
-    return SafeArea(
-      child: Align(
-        alignment: Alignment.topCenter,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-          child: Material(
-            color: const Color(0xFF121812),
-            elevation: 8,
-            borderRadius: BorderRadius.circular(16),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 22,
-                    backgroundColor: cs.primary,
-                    child: Icon(
-                      _c.kind == 'screen'
-                          ? Icons.screen_share
-                          : videoCall
-                              ? Icons.videocam
-                              : Icons.call,
-                      color: Colors.black,
-                    ),
+    final audioOnly = _c.kind == 'audio';
+    final naam = _c.peerName.isEmpty ? 'Onbekend' : _c.peerName;
+    final soort = _c.kind == 'screen'
+        ? 'Inkomend verzoek om scherm te delen'
+        : audioOnly
+            ? 'Inkomend audiogesprek'
+            : 'Inkomend videogesprek';
+    return Material(
+      color: const Color(0xFF070B07),
+      child: SafeArea(
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // Zachte gloed rond de beller.
+            Align(
+              alignment: const Alignment(0, -0.45),
+              child: Container(
+                width: 260,
+                height: 260,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      cs.primary.withValues(alpha: 0.28),
+                      Colors.transparent,
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(_c.peerName.isEmpty ? 'Onbekend' : _c.peerName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 15)),
-                        Text(
-                          _c.kind == 'screen'
-                              ? 'wil zijn/haar scherm delen'
-                              : videoCall
-                                  ? 'video-oproep'
-                                  : 'audiogesprek',
-                          style: const TextStyle(fontSize: 12, color: Colors.white60),
-                        ),
-                      ],
-                    ),
-                  ),
-                  _roundBtn(Icons.close, Colors.redAccent, () => _c.reject()),
-                  const SizedBox(width: 8),
-                  _roundBtn(Icons.call, Colors.greenAccent.shade400, () => _c.accept()),
-                ],
+                ),
               ),
+            ),
+            Column(
+              children: [
+                const Spacer(),
+                CircleAvatar(
+                  radius: 62,
+                  backgroundColor: cs.primary,
+                  child: Text(
+                    naam.characters.first.toUpperCase(),
+                    style: const TextStyle(fontSize: 56, color: Colors.black),
+                  ),
+                ),
+                const SizedBox(height: 22),
+                Text(
+                  naam,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      fontSize: 30,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  soort,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 16, color: Colors.white70),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'AeroTalk',
+                  style: TextStyle(
+                      fontSize: 13, color: cs.primary, letterSpacing: 1.4),
+                ),
+                const Spacer(),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 54),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _callBtn(
+                        icon: Icons.call_end,
+                        label: 'Weigeren',
+                        color: Colors.redAccent,
+                        onTap: () => _c.reject(),
+                      ),
+                      _callBtn(
+                        icon: audioOnly ? Icons.call : Icons.videocam,
+                        label: 'Aannemen',
+                        color: Colors.greenAccent.shade400,
+                        onTap: () => _c.accept(),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _callBtn({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Material(
+          color: color,
+          shape: const CircleBorder(),
+          elevation: 6,
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Icon(icon, size: 34, color: Colors.black),
             ),
           ),
         ),
-      ),
+        const SizedBox(height: 10),
+        Text(label,
+            style: const TextStyle(fontSize: 13, color: Colors.white70)),
+      ],
     );
   }
 

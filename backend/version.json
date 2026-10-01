@@ -1,9 +1,9 @@
 {
     "app": "AeroSurf Browser",
-    "version": "2.9.0",
-    "build": 37,
+    "version": "2.10.0",
+    "build": 38,
     "minVersion": "1.0.0",
-    "notes": "Bellen in AeroTalk: audio, video én scherm delen (AeroTalk-DM's), met gemiste-gesprekkenmelding. AeroNova kent je nu: naam, e-mail, admin, vrienden, servers, mailboxen, zoekgeschiedenis én recente browserpagina's.",
+    "notes": "Echte meldingen: app-icoon, naam en bericht als notificatie met geluid (berichten groeperen). AeroTalk: volledig scherm oproepscherm met ringtone en trilling bij inkomend gesprek. AeroNova luistert 24/7: Hey Nova werkt nu altijd (ook na fouten of lang stilstaan).",
     "updatedAt": "2026-10-01",
     "iosUrl": ""
 }

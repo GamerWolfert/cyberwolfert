@@ -101,7 +101,34 @@ class SoundService {
   /// Belgeluid (inkomend gesprek / oproep).
   static Future<void> playCall() async {
     if (!await callEnabled()) return;
+    try {
+      await _callPlayer.setReleaseMode(ReleaseMode.release);
+    } catch (_) {}
     await _play(_callPlayer, 'call', 'call.mp3');
+  }
+
+  /// Belgeluid herhalen tot [stopCallRing] (inkomende oproep die nog rinkelt).
+  static Future<void> startCallRing() async {
+    if (!await callEnabled()) return;
+    try {
+      await _callPlayer.setReleaseMode(ReleaseMode.loop);
+      final p = await _p;
+      final custom = p.getString(_callPathKey);
+      await _callPlayer.stop();
+      if (custom != null && await fs.fileExists(custom)) {
+        await _callPlayer.play(DeviceFileSource(custom));
+      } else {
+        await _callPlayer.play(AssetSource('call.mp3'));
+      }
+    } catch (_) {}
+  }
+
+  /// Belussen stoppen (aangenomen, geweigerd of opgehangen).
+  static Future<void> stopCallRing() async {
+    try {
+      await _callPlayer.stop();
+      await _callPlayer.setReleaseMode(ReleaseMode.release);
+    } catch (_) {}
   }
 
   static Future<String?> customPath() async {

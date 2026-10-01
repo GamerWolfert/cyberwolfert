@@ -60,12 +60,17 @@ class NotifyService {
       String body = '';
       if (dms.isNotEmpty) {
         final x = dms.first;
-        titel = _s(x['from']) .isEmpty ? 'AeroTalk' : _s(x['from']);
+        titel = _s(x['from']).isEmpty ? 'AeroTalk' : _s(x['from']);
         body = _s(x['body']);
+        if (dms.length > 1) {
+          titel = 'AeroTalk';
+          body = '${dms.length} nieuwe berichten: $body';
+        }
       } else if (mails.isNotEmpty) {
         final x = mails.first;
         titel = 'Nieuwe mail';
         body = '${_s(x['from'])}: ${_s(x['body'])}';
+        if (mails.length > 1) body = '${mails.length} mails: $body';
       } else if (friends.isNotEmpty) {
         titel = 'Vriendschapsverzoek';
         body = _s(friends.first['from']);
@@ -73,10 +78,17 @@ class NotifyService {
         final x = groups.first;
         titel = _s(x['group']).isEmpty ? 'AeroTalk' : _s(x['group']);
         body = '${_s(x['from'])}: ${_s(x['body'])}';
+        if (groups.length > 1) {
+          titel = 'AeroTalk';
+          body = '${groups.length} groepsberichten: $body';
+        }
       }
 
-      await SoundService.playNotif();
-      await LocalNotify.show(titel, body.isEmpty ? 'Nieuwe melding' : body);
+      // Systeemmelding (heads-up met app-icoon) speelt zelf het geluid.
+      // Lukt dat niet (toegang geweigerd / niet-Android), dan het geluid
+      // van de app afspelen zodat je iets hoort.
+      final id = await LocalNotify.show(titel, body.isEmpty ? 'Nieuwe melding' : body);
+      if (id < 0) await SoundService.playNotif();
     } catch (_) {
       // stille backend / offline: volgende ronde opnieuw proberen
     }

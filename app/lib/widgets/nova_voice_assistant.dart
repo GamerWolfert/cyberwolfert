@@ -35,6 +35,8 @@ class _NovaVoiceAssistantState extends State<NovaVoiceAssistant> {
     if (!_cardOpen &&
         (s == NovaVoiceStatus.asking ||
             s == NovaVoiceStatus.speaking ||
+            s == NovaVoiceStatus.heard ||
+            _nova.heard.isNotEmpty ||
             _nova.answer.isNotEmpty ||
             _nova.error.isNotEmpty)) {
       _cardOpen = true;
@@ -169,6 +171,17 @@ class _NovaVoiceAssistantState extends State<NovaVoiceAssistant> {
             ),
             const SizedBox(height: 5),
             body,
+            if (_nova.debug.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  _nova.debug,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontSize: 10.5, color: Colors.white38),
+                ),
+              ),
             Align(
               alignment: Alignment.centerRight,
               child: IconButton(
