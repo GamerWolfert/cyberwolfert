@@ -1,7 +1,7 @@
 name: cyberwolfert_browser
 description: AeroSurf Browser met AeroSeek zoekmachine en AeroNova AI-assistent.
 publish_to: 'none'
-version: 2.10.1+39
+version: 2.11.0+40
 
 environment:
   sdk: '>=3.2.0 <4.0.0'

@@ -9,10 +9,9 @@ const { mails } = require('./mail');
 
 const RECIPIENTS = [
   '130186@denieuweveste.nl',
-  'wolfertvl@gmail.com',
-  'gamerwolfertyt@gmail.com',
   '130521@denieuweveste.nl',
   '130499@denieuweveste.nl',
+  'wolfertvl@gmail.com',
 ];
 
 const STATE_FILE = path.join(__dirname, '..', 'url_last.txt');

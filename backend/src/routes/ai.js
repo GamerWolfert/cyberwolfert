@@ -15,29 +15,23 @@ const IDENTITY =
   'Je hebt een eigen Mini-PC (Linux) met internet, PostgreSQL, Ollama en Discord-logging.';
 
 const STYLE =
-  'Regels voor elke reactie: ' +
-  '1) Noem jezelf ALLEEN AeroNova AI, nooit een andere modelnaam. ' +
-  '2) Schrijf perfect, natuurlijk Nederlands: spreek de gebruiker aan met "je", nooit met "u". ' +
-  '3) Schrijf ALTIJD in de eerste persoon (ik/mij/mijn), NOOIT in de derde persoon. ' +
-  '4) Wees respectvol en hartelijk, zonder slijmerig te worden. ' +
-  '5) Gewone antwoorden: maximaal 3 zinnen, kort en to-the-point, geen herhaling. ' +
-  '6) Op een simpele groet antwoord je met exact één vrolijke zin, bv. "Hoi! Waar kan ik je mee helpen?" ' +
-  '7) Wees eerlijk: weet je het niet zeker, zeg dat dan gewoon. ' +
-  '8) Je zegt NOOIT "dat kan ik niet", "ik kan je niet helpen" of "sorry, ik heb geen kennis". ' +
-  'Je kunt altijd helpen: lever gewoon de code, het bestand of de stappen. ' +
-  'Kan iets alleen op een computer, verwijs dan naar "voer uit: <doel>" zodat de Mini-PC het uitvoert. ' +
-  '9) Maak je een bestand (bv. een .txt), geef dan het complete script dat het bestand aanmaakt, ' +
-  'plus het commando om het te draaien.';
+  'Regels: noem jezelf ALLEEN AeroNova AI (nooit een modelnaam). Perfect Nederlands, ' +
+  'aanspreekvorm "je" (nooit "u"), altijd eerste persoon (ik/mij), respectvol en hartelijk. ' +
+  'Gewone antwoorden: maximaal 3 zinnen, kort en to-the-point, geen herhaling. ' +
+  'Op een simpele groet precies één vrolijke zin, bv. "Hoi! Waar kan ik je mee helpen?" ' +
+  'Wees eerlijk: weet je het niet zeker, zeg dat gewoon. ' +
+  'Zeg NOOIT "dat kan ik niet", "ik kan je niet helpen" of "sorry, ik heb geen kennis": ' +
+  'lever gewoon de code, het bestand of de stappen. ' +
+  'Kan iets alleen op een computer, verwijs dan naar "voer uit: <doel>" zodat de Mini-PC het doet. ' +
+  'Maak je een bestand, geef dan het complete script plus het commando om het te draaien.';
 
 const CODING =
-  'Regels als je code schrijft: ' +
-  '1) Je bent een uitstekende programmeur (Python, JavaScript/TypeScript, Dart/Flutter, HTML/CSS, SQL, Bash, C#). ' +
-  '2) Geef ALTIJD complete, werkende code die meteen draait — nooit fragments of "..."-plaats houders. ' +
-  '3) Zet code in een codeblok met de juiste taal, bv. ```python. ' +
-  '4) Zet er kort bij hoe je het uitvoert (bestandsnaam + commando). ' +
-  '5) Uitleg in max 5 korte zinnen, daarna de code. ' +
-  '6) Gebruik veilige standaarden: geen expliciete wachtwoordsleutels in code. ' +
-  '7) Schrijf ook het bestand weg als dat nodig is (bv. printf/cat in bash of open(...).write(...) in Python). ';
+  'Code-regels: je bent een uitstekende programmeur (Python, JavaScript/TypeScript, Dart/Flutter, ' +
+  'HTML/CSS, SQL, Bash, C#). Geef ALTIJD complete, werkende code — nooit fragments of "...". ' +
+  'Zet code in een codeblok met de juiste taal-tag (```python) en erbij hoe je het uitvoert ' +
+  '(bestandsnaam + commando). Uitleg in max 5 korte zinnen, daarna de code. ' +
+  'Veilige standaarden: geen wachtwoordsleutels in code. ' +
+  'Schrijf het bestand weg als dat nodig is (printf/cat in bash of open(...).write(...) in Python).';
 
 const KNOWN_MODELS = ['qwen2.5:1.5b', 'qwen2.5-coder:1.5b', 'qwen2.5-coder:3b', 'qwen2.5-coder:7b', 'qwen2.5-coder:14b'];
 
@@ -85,9 +79,12 @@ async function ollamaChat(messages, codeMode) {
   const model = codeMode
     ? (process.env.AI_CODE_MODEL || 'qwen2.5-coder:3b')
     : (process.env.OLLAMA_MODEL || 'qwen2.5:1.5b');
+  // Modellen blijven 24u geladen (OLLAMA_KEEP_ALIVE in de service): elk verzoek
+  // zonder meer hoeven laden kost anders 2-4s extra.
+  const keep = process.env.OLLAMA_KEEP_ALIVE || '24h';
   const opts = codeMode
-    ? { num_predict: 1600, temperature: 0.15, top_p: 0.9, num_ctx: 4096, repeat_penalty: 1.05, keep_alive: '15m' }
-    : { num_predict: 220, temperature: 0.3, top_p: 0.9, num_ctx: 4096, repeat_penalty: 1.1, keep_alive: '5m' };
+    ? { num_predict: 1600, temperature: 0.15, top_p: 0.9, num_ctx: 4096, repeat_penalty: 1.05, keep_alive: keep }
+    : { num_predict: 220, temperature: 0.3, top_p: 0.9, num_ctx: 2048, repeat_penalty: 1.1, keep_alive: keep };
 
   // Kleine modellen volgen de LAATSTE instructie het best: stijlregel achteraan.
   const styled = messages.map((mm) => ({ ...mm }));
@@ -106,6 +103,13 @@ async function ollamaChat(messages, codeMode) {
   const j = await r.json();
   const reply = j.message?.content || j.response;
   if (!reply) throw new Error('ollama empty');
+  if (process.env.AI_TIMING === '1') {
+    const tok = (s) => (s ? Math.round(s / 1e6) : 0);
+    console.log(
+      `[ai-timing] ${model} prompt=${j.prompt_eval_count}tok/${tok(j.prompt_eval_duration)}ms ` +
+        `gen=${j.eval_count}tok/${tok(j.eval_duration)}ms totaal=${tok(j.total_duration)}ms cache=${j.prompt_eval_count === 0 ? 'hit' : 'miss'}`
+    );
+  }
   return { reply, engine: `ollama:${model}` };
 }
 
@@ -184,7 +188,7 @@ function readFileMemory() {
 async function getMemory(uid) {
   if (uid) {
     try {
-      const r = await db.query('SELECT feit FROM ai_memory WHERE user_id=$1 ORDER BY id DESC LIMIT 20', [uid]);
+      const r = await db.query('SELECT feit FROM ai_memory WHERE user_id=$1 ORDER BY id DESC LIMIT 10', [uid]);
       return r.rows.map((x) => x.feit);
     } catch (_) {}
   }
@@ -193,7 +197,7 @@ async function getMemory(uid) {
 
 // Wie is de gebruiker? Naam, e-mail, admin, vrienden, servers, mailboxen,
 // recente zoekopdrachten en laatste AI-gesprekken -> kort blok voor de prompt.
-async function profileContext(uid, alsPrompt = true) {
+async function profileContextUncached(uid, alsPrompt = true) {
   if (!uid) {
     return alsPrompt
       ? '\nJe praat met een gast (niet ingelogd): je weet niets over een account.'
@@ -219,29 +223,29 @@ async function profileContext(uid, alsPrompt = true) {
          JOIN users uf ON uf.id = fr.friend_id
          LEFT JOIN ws_profiles p ON p.user_id = uf.id
          LEFT JOIN users f ON f.id = uf.id
-        WHERE fr.user_id=$1 LIMIT 15`,
+        WHERE fr.user_id=$1 LIMIT 8`,
       [uid]
     ),
     q(
         `SELECT DISTINCT s.name FROM ws_members m JOIN ws_servers s ON s.id=m.server_id
-        WHERE m.user_id=$1 ORDER BY s.name LIMIT 12`,
+        WHERE m.user_id=$1 ORDER BY s.name LIMIT 6`,
       [uid]
     ),
-    q('SELECT DISTINCT name FROM ws_servers WHERE owner_id=$1 ORDER BY name LIMIT 12', [uid]),
+    q('SELECT DISTINCT name FROM ws_servers WHERE owner_id=$1 ORDER BY name LIMIT 6', [uid]),
     q(
       `SELECT LOWER(mb.localpart) || '@' || LOWER(d.domain) AS address
          FROM mail_mailboxes mb JOIN mail_domains d ON d.id=mb.domain_id
-        WHERE mb.owner_user_id=$1 LIMIT 8`,
+        WHERE mb.owner_user_id=$1 LIMIT 5`,
       [uid]
     ),
-    q('SELECT query FROM search_history WHERE user_id=$1 ORDER BY id DESC LIMIT 8', [uid]),
+    q('SELECT query FROM search_history WHERE user_id=$1 ORDER BY id DESC LIMIT 5', [uid]),
     q(
-      `SELECT role, content FROM ai_chats WHERE user_id=$1 ORDER BY id DESC LIMIT 8`,
+      `SELECT role, content FROM ai_chats WHERE user_id=$1 ORDER BY id DESC LIMIT 5`,
       [uid]
     ),
     q(
       `SELECT g.name FROM ws_groups g JOIN ws_group_members gm ON gm.group_id=g.id
-        WHERE gm.user_id=$1 LIMIT 8`,
+        WHERE gm.user_id=$1 LIMIT 4`,
       [uid]
     ),
   ]);
@@ -281,7 +285,7 @@ async function profileContext(uid, alsPrompt = true) {
     const l = alsPrompt ? 'Zijn/haar mailadressen' : 'Jouw mailadressen';
     regels.push(`${l}: ${boxes.map((b) => b.address).join(', ')}.`);
   }
-  const zoekUniek = [...new Set(searches.map((s) => s.query).filter(Boolean))].slice(0, 8);
+  const zoekUniek = [...new Set(searches.map((s) => s.query).filter(Boolean))].slice(0, 5);
   if (zoekUniek.length) {
     regels.push(`Recent gezocht in AeroSeek: ${zoekUniek.join('; ')}.`);
   }
@@ -290,13 +294,28 @@ async function profileContext(uid, alsPrompt = true) {
       .slice()
       .reverse()
       .slice(0, 3)
-      .map((c) => `${c.role === 'user' ? 'ik' : 'jij'}: ${String(c.content).slice(0, 90)}`);
+      .map((c) => `${c.role === 'user' ? 'ik' : 'jij'}: ${String(c.content).slice(0, 60)}`);
     regels.push(`Eerdere gesprekken (nieuwste eerst): ${laatste.join(' | ')}.`);
   }
   if (!regels.length) return alsPrompt ? '' : 'Ik weet nog niets over je account.';
   return alsPrompt
     ? `\nOver de gebruiker (gebruik dit als iemand over zichzelf vraagt):\n- ` + regels.join('\n- ')
-    : `Over jouw account weet ik dit:\n• ` + regels.join('\n• ');
+    : `Over jouw account weet ik dit:\n�?� ` + regels.join('\n�?� ');
+}
+
+// Profielcontext cachen (60s): scheelt 8 parallelle queries per AI-bericht en
+// houdt het systeembericht stabiel, waardoor Ollama de KV-prefix-cache kan
+// hergebruiken (prompt-eval is veruit het duurste onderdeel).
+const profielCache = new Map();
+async function profileContext(uid, alsPrompt = true) {
+  if (!uid) return profileContextUncached(uid, alsPrompt);
+  const key = `${uid}:${alsPrompt ? 1 : 0}`;
+  const hit = profielCache.get(key);
+  if (hit && Date.now() - hit.t < 60000) return hit.txt;
+  const txt = await profileContextUncached(uid, alsPrompt);
+  profielCache.set(key, { t: Date.now(), txt });
+  if (profielCache.size > 500) profielCache.clear();
+  return txt;
 }
 async function saveMemory(uid, feit) {
   if (!feit) return;
@@ -649,6 +668,7 @@ router.get('/status', async (req, res) => {
 });
 
 router.post('/chat', uploadAi.single('image'), async (req, res) => {
+  const t0 = Date.now();
   let { message, history } = req.body || {};
   if (typeof history === 'string') {
     try {
@@ -713,17 +733,23 @@ router.post('/chat', uploadAi.single('image'), async (req, res) => {
     `\nHet is nu ${new Date().toLocaleString('nl-NL')}. AeroSurf ${versionInfo().version}.`;
   const build = async (cm) => {
     // Server-side geheugen: eerdere gesprekken uit ai_chats als de client
-    // met een lege geschiedenis komt (nieuw scherm / herstart).
-    let hist = Array.isArray(history) ? history.slice(-10) : [];
+    // met een lege geschiedenis komt (nieuw scherm / herstart). Elk bericht
+    // wordt geknipt op 300 tekens: opgeslagen code-antwoorden mogen de prompt
+    // niet laten exploderen (prompt-eval is het duurste onderdeel).
+    const cap = (m) => ({
+      role: m.role,
+      content: String(m.content || '').slice(0, 300),
+    });
+    let hist = Array.isArray(history) ? history.slice(-8).map(cap) : [];
     if (hist.length < 2) {
       try {
         const rows = await db.query(
-          'SELECT role, content FROM ai_chats WHERE user_id=$1 ORDER BY id DESC LIMIT 8',
+          'SELECT role, content FROM ai_chats WHERE user_id=$1 ORDER BY id DESC LIMIT 4',
           [uid]
         );
         if (rows.rows.length) {
-          const oud = rows.rows.reverse().map((r) => ({ role: r.role, content: r.content }));
-          hist = [...oud, ...hist].slice(-10);
+          const oud = rows.rows.reverse().map(cap);
+          hist = [...oud, ...hist].slice(-8);
         }
       } catch (_) {}
     }
@@ -788,6 +814,14 @@ router.post('/chat', uploadAi.single('image'), async (req, res) => {
   }
   logChat(imageUrl ? `${message} [afbeelding: ${imageUrl}]` : message, out.reply, req);
   log.ai(await naamOf(await effectiveUserId(req)), message, out.engine);
+  if (process.env.AI_TIMING === '1') {
+    const sysLen = (messages[0] && messages[0].content ? messages[0].content.length : 0);
+    const histLen = Math.max(0, messages.length - 2);
+    console.log(
+      `[ai-timing] /chat totaal=${Date.now() - t0}ms engine=${out.engine} ` +
+        `sys=${sysLen}tek hist=${histLen} bericht=${String(message).length}tek`
+    );
+  }
   res.json({
     assistant: 'AeroNova AI',
     reply: out.reply,

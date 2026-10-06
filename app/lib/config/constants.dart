@@ -12,7 +12,12 @@ class AppConfig {
   /// de app zoekt hem daarna automatisch via /api/tunnel of onthoudt de laatste
   /// werkende URL, en Instellingen → Server-URL laat je hem handmatig invullen).
   static const String tunnelUrl =
-      'https://stanford-science-passenger-went.trycloudflare.com/api';
+      'https://test-dreams-individually-camel.trycloudflare.com/api';
+
+  /// Statische ngrok-URL: verandert NOOIT en werkt daarom ook buiten thuis als
+  /// de cloudflare-quick-tunnel net opnieuw gestart is (nieuwe URL).
+  static const String ngrokUrl =
+      'https://train-entrust-boozy.ngrok-free.dev/api';
 
   static const String _override = String.fromEnvironment('API_BASE_URL', defaultValue: '');
 
@@ -42,6 +47,7 @@ class AppConfig {
     }
     if (_override.isNotEmpty) out.add(override);
     out.add('http://$miniPcIp:$backendPort/api');
+    out.add(ngrokUrl);
     out.add(tunnelUrl);
     return out.toSet().toList();
   }

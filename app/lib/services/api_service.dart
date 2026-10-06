@@ -47,22 +47,26 @@ class ApiService {
     return s.endsWith('/api') ? s : '$s/api';
   }
 
-  /// Vraagt de backend welke externe tunnel nu actief is (alleen bereikbaar
-  /// via LAN, maar dat is precies waar de URL het eerst bekend is).
+  /// Vraagt de backend welke externe tunnel nu actief is. Eerst via de LAN-ip
+  /// (snel, maar alleen thuis), daarna via de vaste ngrok-URL — die is vanaf
+  /// overal bereikbaar en levert dus ook buiten thuis de actuele cloudflare-URL.
   static Future<String?> _discoverTunnel() async {
-    try {
-      final r = await http
-          .get(
-              Uri.parse(
-                  'http://${AppConfig.miniPcIp}:${AppConfig.backendPort}/api/tunnel'),
-              headers: {'ngrok-skip-browser-warning': '1'})
-          .timeout(const Duration(seconds: 3));
-      if (r.statusCode == 200) {
-        final j = jsonDecode(r.body) as Map<String, dynamic>;
-        final u = _normBase((j['url'] ?? '').toString());
-        if (u != null) return u;
-      }
-    } catch (_) {}
+    final probes = <String>[
+      'http://${AppConfig.miniPcIp}:${AppConfig.backendPort}/api/tunnel',
+      '${AppConfig.ngrokUrl}/tunnel',
+    ];
+    for (final u in probes) {
+      try {
+        final r = await http
+            .get(Uri.parse(u), headers: {'ngrok-skip-browser-warning': '1'})
+            .timeout(const Duration(seconds: 4));
+        if (r.statusCode == 200) {
+          final j = jsonDecode(r.body) as Map<String, dynamic>;
+          final b = _normBase((j['url'] ?? '').toString());
+          if (b != null) return b;
+        }
+      } catch (_) {}
+    }
     return null;
   }
 
