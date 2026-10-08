@@ -44,22 +44,59 @@ async function checkUrl(raw) {
   return { ok: true, url: u.toString() };
 }
 
+function friendlyReason(msg) {
+  const m = (msg || '').toLowerCase();
+  if (m.includes('ongeldige')) return 'Dit is geen geldig webadres. Typ bijvoorbeeld google.com of https://site.nl';
+  if (m.includes('poort') || m.includes('lokaal') || m.includes('prive')) {
+    return 'Deze site kan alleen binnen je eigen netwerk (lokaal/LAN), niet via de proxy.';
+  }
+  if (m.includes('domein niet gevonden')) return 'Domein niet gevonden — controleer de spelling van het adres.';
+  if (m.includes('alleen http')) return 'Alleen http:// en https:// adressen werken in AeroSurf.';
+  return 'Deze pagina is niet bereikbaar.';
+}
+
+// frame-check: BEOORDEEL of een adres bruikbaar is (voor de browser).
+// Alles wordt toegestaan, ook LAN-adressen, poorten en localhost — daar
+// deed de vorige versie te streng over en dan weigerde AeroSurf geldige URL's.
 router.get('/frame-check', async (req, res) => {
-  const c = await checkUrl(req.query.url || '');
-  if (!c.ok) return res.json({ framing: 'na', reason: c.error });
+  const raw = req.query.url || '';
+  let u;
+  try {
+    u = new URL(raw);
+  } catch {
+    return res.json({ framing: 'na', reason: friendlyReason('ongeldige url') });
+  }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') {
+    return res.json({ framing: 'na', reason: friendlyReason('alleen http') });
+  }
+  try {
+    await dns.lookup(u.hostname);
+  } catch {
+    return res.json({ framing: 'na', reason: friendlyReason('domein niet gevonden') });
+  }
   try {
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), 8000);
-    const r = await fetch(c.url, { headers: UA, signal: ctl.signal, redirect: 'follow' });
+    const r = await fetch(u.toString(), { headers: UA, signal: ctl.signal, redirect: 'follow' });
     clearTimeout(t);
     const xfo = (r.headers.get('x-frame-options') || '').toLowerCase();
     const csp = (r.headers.get('content-security-policy') || '').toLowerCase();
     const blocked =
       xfo.includes('deny') || xfo.includes('sameorigin') ||
       /frame-ancestors[^;]*('none'|[^;]*'self')/.test(csp);
-    res.json({ framing: r.ok ? (blocked ? 'blocked' : 'open') : 'na' });
-  } catch {
-    res.json({ framing: 'na' });
+    if (!blocked) return res.json({ framing: 'open', status: r.status });
+    // Framing geblokkeerd: alleen echt verder helpen als de proxy mag.
+    const proxyOk = await checkUrl(u.toString());
+    if (!proxyOk.ok) {
+      return res.json({ framing: 'na', reason: friendlyReason(proxyOk.error), status: r.status });
+    }
+    return res.json({ framing: 'blocked', status: r.status });
+  } catch (e) {
+    const reason =
+      e && e.name === 'AbortError'
+        ? 'Deze site reageert niet (timeout).'
+        : 'Verbinding met deze site mislukt — hij is nu niet bereikbaar.';
+    return res.json({ framing: 'na', reason });
   }
 });
 

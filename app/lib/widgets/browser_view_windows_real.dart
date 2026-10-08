@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:webview_windows/webview_windows.dart';
 import '../services/api_service.dart';
+import 'browser_handle.dart';
 import 'wolf_error.dart';
 
 /// Echte ingebedde browser op Windows via Edge WebView2.
@@ -8,7 +9,9 @@ import 'wolf_error.dart';
 /// (nooit Edge-teksten).
 class WindowsBrowserView extends StatefulWidget {
   final String url;
-  const WindowsBrowserView({super.key, required this.url});
+  final BrowserHandle? handle;
+  const WindowsBrowserView(
+      {super.key, required this.url, this.handle});
 
   @override
   State<WindowsBrowserView> createState() => _WindowsBrowserViewState();
@@ -19,10 +22,40 @@ class _WindowsBrowserViewState extends State<WindowsBrowserView> {
   final ApiService _api = ApiService();
   bool _ready = false;
   bool _dead = false;
+  String? _errDetail; // laadfout van WebView2 -> onze eigen tekst
   String _current = '';
   // Audio per tabblad (via JS in de pagina, net als mobiel)
   bool _muted = false;
   double _volume = 1.0;
+
+  /// WebView2-status vertalen naar AeroSurf-taal (nooit Edge-teksten).
+  static String _fout(WebErrorStatus s) {
+    switch (s) {
+      case WebErrorStatus.WebErrorStatusHostNameNotResolved:
+        return 'Domein niet gevonden — controleer de spelling van het adres.';
+      case WebErrorStatus.WebErrorStatusTimeout:
+        return 'Deze site reageert niet (timeout). Probeer het later nog eens.';
+      case WebErrorStatus.WebErrorStatusCertificateExpired:
+      case WebErrorStatus.WebErrorStatusCertificateIsInvalid:
+      case WebErrorStatus.WebErrorStatusCertificateCommonNameIsIncorrect:
+      case WebErrorStatus.WebErrorStatusCertificateRevoked:
+      case WebErrorStatus.WebErrorStatusClientCertificateContainsErrors:
+        return 'De beveiligde verbinding (SSL) van deze site klopt niet.';
+      case WebErrorStatus.WebErrorStatusValidAuthenticationCredentialsRequired:
+      case WebErrorStatus.WebErrorStatusValidProxyAuthenticationRequired:
+        return 'Deze site vraagt om inloggen en weigert het verzoek.';
+      case WebErrorStatus.WebErrorStatusCannotConnect:
+      case WebErrorStatus.WebErrorStatusServerUnreachable:
+      case WebErrorStatus.WebErrorStatusConnectionAborted:
+      case WebErrorStatus.WebErrorStatusConnectionReset:
+      case WebErrorStatus.WebErrorStatusDisconnected:
+        return 'Verbinding met deze site mislukt — hij is nu niet bereikbaar.';
+      case WebErrorStatus.WebErrorStatusErrorHTTPInvalidServerResponse:
+        return 'Deze site geeft een ongeldig antwoord (HTTP-fout).';
+      default:
+        return 'Deze pagina is niet bereikbaar. Controleer het adres of je verbinding.';
+    }
+  }
 
   @override
   void initState() {
@@ -34,12 +67,35 @@ class _WindowsBrowserViewState extends State<WindowsBrowserView> {
       setState(() => _ready = true);
       _ctrl.loadUrl(widget.url);
     });
+    // Laadfouten: Eigen foutpagina i.p.v. het standaard Edge-plaatje.
+    // Volgorde in WebView2: eerst onLoadError, daarna navigationCompleted —
+    // dus alleen wissen zodra er een NIEUWE navigatie start.
+    _ctrl.onLoadError.listen((status) {
+      if (!mounted) return;
+      setState(() => _errDetail = _fout(status));
+    });
+    _ctrl.loadingState.listen((state) {
+      if (!mounted) return;
+      if (state == LoadingState.loading && _errDetail != null) {
+        setState(() => _errDetail = null);
+      }
+    });
     _ctrl.url.listen((url) {
       if (mounted && url.isNotEmpty) {
         setState(() => _current = url);
         _applyAudio();
       }
     });
+    widget.handle?.back = () => _ctrl.goBack();
+    widget.handle?.forward = () => _ctrl.goForward();
+    widget.handle?.reload = () => _ctrl.reload();
+  }
+
+  @override
+  void dispose() {
+    widget.handle?.clear();
+    _ctrl.dispose();
+    super.dispose();
   }
 
   Future<void> _applyAudio() async {
@@ -102,12 +158,17 @@ class _WindowsBrowserViewState extends State<WindowsBrowserView> {
   }
 
   Future<void> _check(String url) async {
-    final mode = await _api.frameCheck(url);
+    final info = await _api.frameInfo(url);
     if (!mounted) return;
+    final mode = info?['framing']?.toString();
     if (mode == 'na') {
-      // Backend zegt: domein bestaat niet / onbereikbaar -> eigen pagina
-      final reachable = await _api.health();
-      if (reachable) setState(() => _dead = true);
+      // Backend zegt: onbereikbaar / ongeldig -> eigen pagina met reden
+      setState(() {
+        _dead = true;
+        _errDetail = info?['reason']?.toString() ?? 'Dit adres lijkt niet te bestaan.';
+      });
+    } else {
+      setState(() => _dead = false);
     }
   }
 
@@ -115,26 +176,26 @@ class _WindowsBrowserViewState extends State<WindowsBrowserView> {
   void didUpdateWidget(covariant WindowsBrowserView old) {
     super.didUpdateWidget(old);
     if (old.url != widget.url) {
-      setState(() => _dead = false);
+      setState(() {
+        _dead = false;
+        _errDetail = null;
+      });
       if (_ready) _ctrl.loadUrl(widget.url);
       _check(widget.url);
     }
   }
 
   @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    if (_dead) {
+    if (_dead || _errDetail != null) {
       return WolfErrorView(
         url: widget.url,
-        detail: 'Dit adres lijkt niet te bestaan.',
+        detail: _errDetail ?? 'Dit adres lijkt niet te bestaan.',
         onRetry: () {
-          setState(() => _dead = false);
+          setState(() {
+            _dead = false;
+            _errDetail = null;
+          });
           _check(widget.url);
           if (_ready) _ctrl.loadUrl(widget.url);
         },

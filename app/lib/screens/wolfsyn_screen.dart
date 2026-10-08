@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
@@ -1096,39 +1097,192 @@ class _ServerScreenState extends State<ServerScreen> {
     );
   }
 
-  /// Chatkolom: berichten + invoerveld (focus blijft na verzenden).
-  Widget _chatPane() {
-    if (_channelId == null) {
-      return const Center(child: Text('Nog geen kanalen.'));
+  // --- Discord-achtige chatstijl ---
+  static const _chatDim = Color(0xFF949BA4);
+  static const _chatText = Color(0xFFDBDEE1);
+  static const _chatHover = Color(0xFF0E130E);
+
+  DateTime? _msgTime(Map m) {
+    final s = m['created_at']?.toString();
+    if (s == null || s.isEmpty) return null;
+    try {
+      return DateTime.parse(s).toLocal();
+    } catch (_) {
+      return null;
     }
+  }
+
+  int _dagKey(DateTime t) => DateTime(t.year, t.month, t.day).millisecondsSinceEpoch;
+
+  String _klok(DateTime t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+  String _dagTitel(DateTime t) {
+    final nu = DateTime.now();
+    final dagen = DateTime(nu.year, nu.month, nu.day)
+        .difference(DateTime(t.year, t.month, t.day))
+        .inDays;
+    if (dagen == 0) return 'Vandaag';
+    if (dagen == 1) return 'Gisteren';
+    const namen = [
+      'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag', 'zondag'
+    ];
+    if (dagen < 7) {
+      final n = namen[t.weekday - 1];
+      return n[0].toUpperCase() + n.substring(1);
+    }
+    return '${t.day}-${t.month.toString().padLeft(2, '0')}-${t.year}';
+  }
+
+  String _datumLabel(DateTime t) {
+    final nu = DateTime.now();
+    final dagen = DateTime(nu.year, nu.month, nu.day)
+        .difference(DateTime(t.year, t.month, t.day))
+        .inDays;
+    if (dagen == 0) return 'vandaag om ${_klok(t)}';
+    if (dagen == 1) return 'gisteren om ${_klok(t)}';
+    if (t.year == nu.year) return '${t.day}-${t.month} om ${_klok(t)}';
+    return '${t.day}-${t.month}-${t.year} om ${_klok(t)}';
+  }
+
+  /// Lang drukken op een bericht: kopiëren (Discord-menu-achtig).
+  Future<void> _berichtMenu(Map<String, dynamic> m) async {
+    final tekst = (m['body'] ?? '').toString();
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF0E140E),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(14),
+              child: Text('Bericht',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+            ),
+            ListTile(
+              leading: const Icon(Icons.copy_rounded, color: _chatText),
+              title: const Text('Bericht kopiëren'),
+              onTap: () async {
+                Navigator.pop(ctx);
+                try {
+                  await Clipboard.setData(ClipboardData(text: tekst));
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Gekopieerd.')));
+                  }
+                } catch (_) {}
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.close_rounded, color: _chatDim),
+              title: const Text('Annuleren'),
+              onTap: () => Navigator.pop(ctx),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _dagScheider(DateTime t) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          children: [
+            const Expanded(child: Divider(color: Colors.white12, height: 1)),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0E140E),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.white12),
+                ),
+                child: Text(_dagTitel(t),
+                    style:
+                        const TextStyle(fontSize: 11.5, color: _chatDim)),
+              ),
+            ),
+            const Expanded(child: Divider(color: Colors.white12, height: 1)),
+          ],
+        ),
+      );
+
+  /// Eén berichtrij: avatar 40px, groepering van opeenvolgende berichten
+  /// (alleen tijdstempel links in de marge), datum-scheiders en hover-highlight.
+  Widget _berichtRij(BuildContext ctx, int i) {
+    final m = _messages[i] as Map<String, dynamic>;
+    final a = _authorOf(m);
+    final roles = (a['roles'] as List).cast<dynamic>();
+    final t = _msgTime(m);
+    final vorige = (i > 0 && _messages[i - 1] is Map)
+        ? (_messages[i - 1] as Map<String, dynamic>)
+        : null;
+    final tv = vorige != null ? _msgTime(vorige) : null;
+    final gegroepeerd = vorige != null &&
+        vorige['user_id'] == m['user_id'] &&
+        t != null &&
+        tv != null &&
+        _dagKey(t) == _dagKey(tv) &&
+        t.difference(tv).inMinutes.abs() < 7;
+    final nieuweDag = t != null && (tv == null || _dagKey(t) != _dagKey(tv));
+    final naamKleur = roles.isNotEmpty
+        ? _colorOf(((roles.first is Map ? roles.first['color'] : null) ?? '#FFFFFF')
+            .toString())
+        : Colors.white;
+
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.all(12),
-            itemCount: _messages.length,
-            itemBuilder: (ctx, i) {
-              final m = _messages[i] as Map<String, dynamic>;
-              final a = _authorOf(m);
-              final roles = (a['roles'] as List).cast<dynamic>();
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _avatar(a),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Wrap(
+        if (nieuweDag) _dagScheider(t),
+        InkWell(
+          borderRadius: BorderRadius.circular(6),
+          hoverColor: _chatHover,
+          onLongPress: () => _berichtMenu(m),
+          child: Padding(
+            padding: EdgeInsets.only(
+                left: 6,
+                right: 6,
+                top: gegroepeerd ? 1 : 9,
+                bottom: gegroepeerd ? 1 : 9),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 40,
+                  child: gegroepeerd
+                      ? Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            _klok(t),
+                            textAlign: TextAlign.right,
+                            style: const TextStyle(
+                                fontSize: 10, color: _chatDim, height: 1.25),
+                          ),
+                        )
+                      : _avatar(a),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (!gegroepeerd)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 2),
+                          child: Wrap(
                             spacing: 6,
+                            runSpacing: 3,
                             crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
                               Text((a['display'] ?? '?').toString(),
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.bold)),
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 15,
+                                      color: naamKleur)),
                               if ((a['tag'] ?? '').toString().isNotEmpty)
                                 _tagChip(a['tag'].toString()),
                               ...roles.map((r) => Container(
@@ -1146,23 +1300,78 @@ class _ServerScreenState extends State<ServerScreen> {
                                             .toString(),
                                         style: const TextStyle(fontSize: 10)),
                                   )),
+                              if (t != null)
+                                Text(_datumLabel(t),
+                                    style: const TextStyle(
+                                        fontSize: 10.5, color: _chatDim)),
                             ],
                           ),
-                          GifBody((m['body'] ?? '').toString()),
-                          if (m['expires_at'] != null)
-                            _expiry(m['expires_at']),
-                        ],
+                        ),
+                      DefaultTextStyle.merge(
+                        style: const TextStyle(color: _chatText, fontSize: 14.6, height: 1.35),
+                        child: GifBody((m['body'] ?? '').toString()),
                       ),
-                    ),
-                  ],
+                      if (m['expires_at'] != null) _expiry(m['expires_at']),
+                    ],
+                  ),
                 ),
-              );
-            },
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Chatkolom: kanaalkop + Discord-berichtenlijst + invoerveld.
+  Widget _chatPane() {
+    if (_channelId == null) {
+      return const Center(child: Text('Nog geen kanalen.'));
+    }
+    final chName = _channels
+        .where((c) => c is Map && (c['id'] as num).toInt() == _channelId)
+        .map((c) => (c['name'] ?? '').toString())
+        .fold<String>('', (a, b) => b);
+    return Column(
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          decoration: const BoxDecoration(
+            color: Color(0xFF080C08),
+            border: Border(bottom: BorderSide(color: Colors.white10)),
+          ),
+          child: Row(
+            children: [
+              const Text('#',
+                  style: TextStyle(
+                      fontSize: 19,
+                      fontWeight: FontWeight.w700,
+                      color: _chatDim)),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(chName,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15.5,
+                        color: Colors.white)),
+              ),
+              Text('${_messages.length} berichten',
+                  style: const TextStyle(fontSize: 11.5, color: _chatDim)),
+            ],
+          ),
+        ),
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.only(top: 8, bottom: 8, left: 4, right: 8),
+            itemCount: _messages.length,
+            itemBuilder: _berichtRij,
           ),
         ),
         SafeArea(
           child: Padding(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.fromLTRB(10, 6, 10, 10),
             child: Row(
               children: [
                 Expanded(
@@ -1171,17 +1380,32 @@ class _ServerScreenState extends State<ServerScreen> {
                     focusNode: _focus,
                     textInputAction: TextInputAction.send,
                     onSubmitted: (_) => _send(),
-                    decoration: const InputDecoration(
-                        hintText: 'Bericht…  (/delete om te wissen)',
-                        border: OutlineInputBorder()),
+                    style: const TextStyle(color: _chatText),
+                    decoration: InputDecoration(
+                        hintText: chName.isEmpty
+                            ? 'Bericht…  (/delete om te wissen)'
+                            : 'Bericht #$chName…  (/delete om te wissen)',
+                        hintStyle: const TextStyle(color: _chatDim),
+                        filled: true,
+                        fillColor: const Color(0xFF0E140E),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 13),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        )),
                   ),
                 ),
                 IconButton(
                     tooltip: 'GIF of emoji',
                     onPressed: () => wolfPickGif(context, _msg, _send),
-                    icon: const Icon(Icons.gif_box_outlined)),
+                    icon: const Icon(Icons.gif_box_outlined,
+                        color: _chatDim)),
                 IconButton(
-                    onPressed: _send, icon: const Icon(Icons.send)),
+                    tooltip: 'Verzenden',
+                    onPressed: _send,
+                    icon: const Icon(Icons.send_rounded,
+                        color: Color(0xFF3CFF5C))),
               ],
             ),
           ),

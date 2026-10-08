@@ -21,6 +21,7 @@ class _CallOverlayState extends State<CallOverlay> {
   final RTCVideoRenderer _remote = RTCVideoRenderer();
   Timer? _tick;
   int _sec = 0;
+  int _remoteTracks = 0;
 
   @override
   void initState() {
@@ -56,8 +57,18 @@ class _CallOverlayState extends State<CallOverlay> {
           ? _c.localScreen
           : _c.localStream;
       if (_local.srcObject != wantLocal) _local.srcObject = wantLocal;
-      if (_remote.srcObject != _c.remoteStream) _remote.srcObject = _c.remoteStream;
-    } catch (_) {}
+      // Remote: opnieuw koppelen als er een track bijkomt (unified-plan levert
+      // de videotrack soms later dan de eerste audiotrack).
+      final remote = _c.remoteStream;
+      final tracks = remote?.getTracks().length ?? 0;
+      if (_remote.srcObject != remote || tracks != _remoteTracks) {
+        _remoteTracks = tracks;
+        _remote.srcObject = null;
+        _remote.srcObject = remote;
+      }
+    } catch (e) {
+      debugPrint('[calls] renderer koppelen mislukt: $e');
+    }
   }
 
   String _duur() {
@@ -285,6 +296,8 @@ class _CallOverlayState extends State<CallOverlay> {
 
   // --------------------------------------------------------------- actief
   Widget _active(BuildContext context) {
+    final remoteVideo =
+        _c.remoteStream != null && (_c.remoteStream?.getVideoTracks().isNotEmpty ?? false);
     final videoCall = _c.kind != 'audio' || _c.screenOn;
     final showLocal = _c.kind != 'audio';
     return Material(
@@ -293,7 +306,7 @@ class _CallOverlayState extends State<CallOverlay> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            if (videoCall && _c.remoteStream != null)
+            if (videoCall && remoteVideo)
               RTCVideoView(_remote,
                   objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover)
             else

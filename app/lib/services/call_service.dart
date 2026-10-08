@@ -15,7 +15,7 @@ import 'voice_platform.dart';
 enum CallStatus { off, outgoing, incoming, active, ended }
 
 /// AeroTalk-gesprekken: WebRTC (audio/video/scherm delen) met signaling
-/// via de WebSocket op /ws. Eén exemplaar voor de hele app.
+/// via de WebSocket op /ws. EÃƒÂ©n exemplaar voor de hele app.
 class CallService extends ChangeNotifier {
   CallService._();
   static final CallService instance = CallService._();
@@ -51,6 +51,14 @@ class CallService extends ChangeNotifier {
 
   RTCPeerConnection? _pc;
   final List<Map<String, dynamic>> _pending = [];
+  /// Pas signalen toepassen als de peerconnection ÃƒÂ©n onze eigen media
+  /// toegevoegd zijn Ã¢â‚¬â€ anders wordt het antwoord zonder videosporen gemaakt
+  /// en ziet de ander nooit beeld.
+  bool _ready = false;
+  /// True zolang wij een offer verstuurd hebben maar het antwoord nog niet
+  /// binnen is (glare-bescherming bij gelijktijdige renegotiatie).
+  bool _localOfferOut = false;
+  MediaStream? _remote;
 
   bool get inCall =>
       status == CallStatus.outgoing ||
@@ -154,7 +162,7 @@ class CallService extends ChangeNotifier {
         callId = m['call']?.toString();
         peerId = (m['to'] as num?)?.toInt();
         status = CallStatus.outgoing;
-        statusText = 'Bellen…';
+        statusText = 'BellenÃ¢â‚¬Â¦';
         _notify();
         break;
       case 'incoming':
@@ -248,12 +256,19 @@ class CallService extends ChangeNotifier {
 
   // ------------------------------------------------------------------ WebRTC
   Future<RTCPeerConnection> _peer() async {
+    // Unified-plan (de standaard): addStream is hier uitgeschakeld in
+    // libwebrtc, dus werken we met addTrack. Plan-b forceren leverde bij
+    // beide partijen een SDP zonder media op -> elkaars camera nooit zien.
     final pc = await createPeerConnection({
       'iceServers': [
         {'urls': ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302']}
       ],
-      'sdpSemantics': 'plan-b',
     });
+    // Eigen stream-object voor de remote tracks: unified-plan levert op web
+    // soms een lege streams-lijst, dan bouwen we de stream zelf.
+    try {
+      _remote = await createLocalMediaStream('remote');
+    } catch (_) {}
     pc.onIceCandidate = (c) {
       _send({
         't': 'signal',
@@ -265,15 +280,31 @@ class CallService extends ChangeNotifier {
       });
     };
     pc.onAddStream = (s) {
+      if (s.getTracks().isEmpty) return;
       remoteStream = s;
       _notify();
     };
     pc.onTrack = (e) {
+      final track = e.track;
       final streams = e.streams;
       if (streams.isNotEmpty) {
         remoteStream = streams[0];
-        _notify();
+      } else {
+        final r = _remote;
+        if (r != null) {
+          final bestaat = r.getTracks().any((t) => t.id == track.id);
+          if (!bestaat) r.addTrack(track);
+          remoteStream = r;
+        }
       }
+      track.onEnded = () {
+        try {
+          remoteStream?.removeTrack(track);
+        } catch (_) {}
+        if ((remoteStream?.getTracks().length ?? 0) == 0) remoteStream = null;
+        _notify();
+      };
+      _notify();
     };
     pc.onConnectionState = (st) {
       if (st == RTCPeerConnectionState.RTCPeerConnectionStateFailed ||
@@ -303,18 +334,60 @@ class CallService extends ChangeNotifier {
     return s;
   }
 
+  /// Lokale tracks toevoegen (unified-plan): addTrack i.p.v. het oude addStream.
+  Future<void> _addStream(RTCPeerConnection pc, MediaStream? s) async {
+    if (s == null) return;
+    for (final t in s.getTracks()) {
+      try {
+        await pc.addTrack(t, s);
+      } catch (e) {
+        _log('addTrack ${t.kind} mislukt: $e');
+      }
+    }
+  }
+
+  Future<void> _removeStream(RTCPeerConnection pc, MediaStream? s) async {
+    if (s == null) return;
+    final ids = s.getTracks().map((t) => t.id).toSet();
+    try {
+      final senders = await pc.getSenders();
+      for (final send in senders) {
+        final t = send.track;
+        if (t != null && ids.contains(t.id)) {
+          try {
+            await pc.removeTrack(send);
+          } catch (e) {
+            _log('removeTrack mislukt: $e');
+          }
+        }
+      }
+    } catch (e) {
+      _log('getSenders mislukt: $e');
+    }
+  }
+
+  void _log(String m) {
+    // Silently weggooien is waarom bellen onbruikbaar leek: altijd zichtbaar.
+    debugPrint('[calls] $m');
+  }
+
   Future<void> _setupCaller() async {
     try {
       // Alleen bij video gaat de camera aan; scherm-delen deelt de schermstream.
       final wantVideo = kind == 'video';
+      final media = await _media(video: wantVideo); // 1) media vÃƒÂ³ÃƒÂ³r de peer
       final pc = await _peer();
+      await _addStream(pc, media);
+      await _addStream(pc, _screen); // scherm al open vÃƒÂ³ÃƒÂ³r het gesprek
       _pc = pc;
-      await pc.addStream(await _media(video: wantVideo));
       final offer = await pc.createOffer({});
       await pc.setLocalDescription(offer);
+      _ready = true;
+      _localOfferOut = true;
       _send({'t': 'signal', 'call': callId, 'data': {'type': 'offer', 'sdp': offer.sdp}});
       await _flushPending();
     } catch (e) {
+      _log('caller-setup mislukt: $e');
       error = 'Gesprek starten mislukt';
       hangup();
     }
@@ -324,45 +397,74 @@ class CallService extends ChangeNotifier {
     try {
       // Alleen bij video gaat de camera aan; scherm-delen deelt de schermstream.
       final wantVideo = kind == 'video';
+      final media = await _media(video: wantVideo); // 1) media vÃƒÂ³ÃƒÂ³r de peer
       final pc = await _peer();
+      await _addStream(pc, media);
       _pc = pc;
-      await pc.addStream(await _media(video: wantVideo));
+      _ready = true;
       await _flushPending();
     } catch (e) {
+      _log('callee-setup mislukt: $e');
       error = 'Camera/microfoon niet beschikbaar';
-      reject();
+      _rejectNu();
     }
   }
 
+  /// Weigeren, ook als de status al omgezet is (accept() loopt vooruit).
+  void _rejectNu() {
+    _send({'t': 'reject', 'call': callId});
+    _stopRinging();
+    status = CallStatus.off;
+    callId = null;
+    _notify();
+  }
+
+  /// Signalen strikt ÃƒÂ©ÃƒÂ©n voor ÃƒÂ©ÃƒÂ©n afhandelen (anders kan een offer en een
+  /// tegelijkertijd renegotiatie-offer elkaar omver werpen).
+  Future<void> _sigQueue = Future.value();
+  Future<void> _enqueue(Future<void> Function() fn) {
+    _sigQueue = _sigQueue.then((_) => fn()).catchError((e) => _log('signaal mislukt: $e'));
+    return _sigQueue;
+  }
+
   Future<void> _flushPending() async {
-    final pc = _pc;
-    if (pc == null) return;
+    if (_pc == null) return;
     final wacht = [..._pending];
     _pending.clear();
     for (final m in wacht) {
-      await _applySignal(pc, m);
+      await _enqueue(() => _applySignal(_pc!, m));
     }
   }
 
   Future<void> _onSignal(Map<String, dynamic> data) async {
-    final pc = _pc;
-    if (pc == null || status != CallStatus.active) {
+    if (!_ready || _pc == null) {
       _pending.add(data);
       return;
     }
-    await _applySignal(pc, data);
+    await _enqueue(() => _applySignal(_pc!, data));
   }
 
   Future<void> _applySignal(RTCPeerConnection pc, Map<String, dynamic> data) async {
+    final type = (data['type'] ?? '').toString();
     try {
-      final type = (data['type'] ?? '').toString();
       if (type == 'offer') {
+        // Glare: we hebben zelf een offer openstaan -> eerst rollback,
+        // anders faalt setRemoteDescription stil en komt er nooit beeld.
+        if (_localOfferOut) {
+          try {
+            await pc.setRemoteDescription(RTCSessionDescription(null, 'rollback'));
+          } catch (e) {
+            _log('rollback mislukt: $e');
+          }
+          _localOfferOut = false;
+        }
         await pc.setRemoteDescription(RTCSessionDescription(data['sdp'], 'offer'));
         final answer = await pc.createAnswer({});
         await pc.setLocalDescription(answer);
         _send({'t': 'signal', 'call': callId, 'data': {'type': 'answer', 'sdp': answer.sdp}});
       } else if (type == 'answer') {
         await pc.setRemoteDescription(RTCSessionDescription(data['sdp'], 'answer'));
+        _localOfferOut = false;
       } else if (type == 'ice') {
         final c = data['candidate'];
         if (c is Map) {
@@ -373,7 +475,9 @@ class CallService extends ChangeNotifier {
           ));
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      _log('$type verwerken mislukt: $e');
+    }
   }
 
   // ------------------------------------------------------------------ acties
@@ -384,7 +488,7 @@ class CallService extends ChangeNotifier {
     isCaller = true;
     peerId = toUid;
     status = CallStatus.outgoing;
-    statusText = 'Verbinden…';
+    statusText = 'VerbindenÃ¢â‚¬Â¦';
     _notify();
     await connect();
     if (_ws == null) {
@@ -464,9 +568,11 @@ class CallService extends ChangeNotifier {
 
   Future<void> _teardown(String reason) async {
     _stopRinging();
+    _ready = false;
+    _pending.clear();
+    _remote = null;
     final pc = _pc;
     _pc = null;
-    _pending.clear();
     try {
       await pc?.close();
       await pc?.dispose();
@@ -503,7 +609,7 @@ class CallService extends ChangeNotifier {
     _notify();
   }
 
-  /// Scherm delen tijdens een gesprek (of als preview vóór het gesprek).
+  /// Scherm delen tijdens een gesprek (of als preview vÃƒÂ³ÃƒÂ³r het gesprek).
   Future<void> startScreenShare({bool previewOnly = false}) async {
     final s = await navigator.mediaDevices.getDisplayMedia({
       'audio': false,
@@ -515,13 +621,16 @@ class CallService extends ChangeNotifier {
       t.enabled = false;
     }
     final pc = _pc;
-    if (pc != null) {
-      await pc.addStream(s);
+    if (pc != null && _ready) {
+      await _addStream(pc, s);
       try {
         final offer = await pc.createOffer({});
         await pc.setLocalDescription(offer);
+        _localOfferOut = true;
         _send({'t': 'signal', 'call': callId, 'data': {'type': 'offer', 'sdp': offer.sdp}});
-      } catch (_) {}
+      } catch (e) {
+        _log('renegotiatie (scherm aan) mislukt: $e');
+      }
     }
     s.getVideoTracks().firstOrNull?.onEnded = () {
       stopScreenShare();
@@ -537,11 +646,14 @@ class CallService extends ChangeNotifier {
     final pc = _pc;
     if (pc != null && s != null) {
       try {
-        await pc.removeStream(s);
+        await _removeStream(pc, s);
         final offer = await pc.createOffer({});
         await pc.setLocalDescription(offer);
+        _localOfferOut = true;
         _send({'t': 'signal', 'call': callId, 'data': {'type': 'offer', 'sdp': offer.sdp}});
-      } catch (_) {}
+      } catch (e) {
+        _log('renegotiatie (scherm uit) mislukt: $e');
+      }
     }
     for (final t in s?.getTracks() ?? <MediaStreamTrack>[]) {
       t.stop();
@@ -569,7 +681,7 @@ class CallService extends ChangeNotifier {
   }
 
   // -------------------------------------------------------- gemiste gesprekken
-  /// Ophalen uit de backend (laatste 40) — voor de DM-inbox en belbel.
+  /// Ophalen uit de backend (laatste 40) Ã¢â‚¬â€ voor de DM-inbox en belbel.
   Future<void> loadMissed() async {
     try {
       final rows = await ApiService().apiGet('/wolfsyn/calls');

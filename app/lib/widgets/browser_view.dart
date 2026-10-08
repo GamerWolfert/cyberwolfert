@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../services/download_service.dart';
 import '../screens/downloads_screen.dart' show DownloadsScreen;
+import 'browser_handle.dart';
 import 'internal_web.dart';
 import 'windows_webview.dart';
 import 'wolf_error.dart';
@@ -18,7 +19,9 @@ import 'wolf_error.dart';
 class BrowserView extends StatefulWidget {
   final String url;
   final void Function()? onClose;
-  const BrowserView({super.key, required this.url, this.onClose});
+  final BrowserHandle? handle;
+  const BrowserView(
+      {super.key, required this.url, this.onClose, this.handle});
 
   static bool get isMobileEmbedded {
     if (kIsWeb) return false;
@@ -46,6 +49,7 @@ class _BrowserViewState extends State<BrowserView> {
   String? _embedUrl;
   bool _checking = false;
   bool _viaProxy = false;
+  String? _webError; // eigen foutpagina op Web (nooit een kaal browser-plaatje)
 
   String get _current => (_index >= 0 && _index < _stack.length) ? _stack[_index] : widget.url;
   bool get _canBack => _index > 0;
@@ -57,6 +61,15 @@ class _BrowserViewState extends State<BrowserView> {
     if (kIsWeb) {
       _push(widget.url);
       _resolve(widget.url);
+      widget.handle?.back = () {
+        if (_canBack) setState(() => _index--);
+        _resolve(_current);
+      };
+      widget.handle?.forward = () {
+        if (_canForward) setState(() => _index++);
+        _resolve(_current);
+      };
+      widget.handle?.reload = () => _resolve(_current);
     } else if (BrowserView.isMobileEmbedded) {
       _ctrl = WebViewController()
         ..setJavaScriptMode(JavaScriptMode.unrestricted)
@@ -72,14 +85,52 @@ class _BrowserViewState extends State<BrowserView> {
             setState(() => _pageError = null);
             return NavigationDecision.navigate;
           },
+          onPageStarted: (_) => setState(() => _pageError = null),
           onWebResourceError: (e) {
-            setState(() => _pageError = e.description.isNotEmpty
-                ? e.description
-                : 'De pagina kon niet worden geladen.');
+            // Alleen hoofddocument-fouten: een kapotte afbeelding of
+            // scriptje mag de pagina nooit vervangen door een foutpagina.
+            if (e.isForMainFrame == false) return;
+            setState(
+                () => _pageError = _mobieleFout(e.errorType?.name ?? '', e.description));
           },
         ))
         ..loadRequest(Uri.parse(widget.url));
+      widget.handle?.reload = _ctrl?.reload;
+      widget.handle?.back = () => _ctrl?.goBack();
+      widget.handle?.forward = () => _ctrl?.goForward();
     }
+  }
+
+  @override
+  void dispose() {
+    widget.handle?.clear();
+    super.dispose();
+  }
+
+  /// Foutmelding van de WebView omzetten naar AeroSurf-taal
+  /// (nooit een technische Engelstalige regel of een kaal browser-plaatje).
+  String _mobieleFout(String type, String desc) {
+    final t = type.toLowerCase();
+    final d = desc.toLowerCase();
+    if (t.contains('hostlookup') || d.contains('name resolution') || d.contains('dns')) {
+      return 'Domein niet gevonden — controleer de spelling van het adres.';
+    }
+    if (t.contains('timeout') || d.contains('timeout')) {
+      return 'Deze site reageert niet (timeout). Probeer het later nog eens.';
+    }
+    if (t.contains('connect') || d.contains('connect') || d.contains('connection')) {
+      return 'Verbinding met deze site mislukt — hij is nu niet bereikbaar.';
+    }
+    if (t.contains('cert') || d.contains('certificate') || d.contains('ssl') || d.contains('tls')) {
+      return 'De beveiligde verbinding (SSL) van deze site klopt niet.';
+    }
+    if (t.contains('io') || t.contains('file')) {
+      return 'Netwerkfout — controleer je internetverbinding.';
+    }
+    if (desc.isNotEmpty && desc.length < 120 && !RegExp(r'^[a-z0-9_]+$').hasMatch(desc)) {
+      return desc;
+    }
+    return 'Deze pagina is niet bereikbaar. Controleer het adres of je verbinding.';
   }
 
   /// Audio van dit tabblad dempen/zachter zetten (werkt op alle
@@ -182,6 +233,7 @@ class _BrowserViewState extends State<BrowserView> {
     setState(() {
       _checking = true;
       _viaProxy = false;
+      _webError = null;
       _embedUrl = url;
     });
     try {
@@ -193,7 +245,12 @@ class _BrowserViewState extends State<BrowserView> {
           .timeout(const Duration(seconds: 10));
       if (r.statusCode == 200) {
         final j = jsonDecode(r.body) as Map<String, dynamic>;
-        if (j['framing'] == 'blocked') {
+        if (j['framing'] == 'na') {
+          if (mounted) {
+            setState(() => _webError =
+                (j['reason']?.toString()) ?? 'Deze pagina is niet bereikbaar.');
+          }
+        } else if (j['framing'] == 'blocked') {
           if (mounted) {
             setState(() {
               _viaProxy = true;
@@ -234,6 +291,14 @@ class _BrowserViewState extends State<BrowserView> {
   @override
   Widget build(BuildContext context) {
     if (kIsWeb) {
+      if (_webError != null && !_checking) {
+        return WolfErrorView(
+          url: _current,
+          detail: _webError,
+          onRetry: () => _resolve(_current),
+          onHome: () => widget.onClose?.call(),
+        );
+      }
       return Column(children: [
         Material(
           elevation: 2,

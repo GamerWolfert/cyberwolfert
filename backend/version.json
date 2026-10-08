@@ -1,9 +1,9 @@
 {
     "app": "AeroSurf Browser",
-    "version": "2.11.0",
-    "build": 40,
+    "version": "2.12.0",
+    "build": 41,
     "minVersion": "1.0.0",
-    "notes": "Altijd verbonden: de vaste ngrok-URL staat nu standaard in de lijst met servers, zodat inloggen buiten thuis ook werkt als de cloudflare-tunnel net een nieuwe URL heeft gekregen. Tevens snellere AeroNova-antwoorden (kortere prompt, modellen blijven geladen) en een snellere website (gzip + cache-headers).",
+    "notes": "300x beter: elke invoer wordt nu een werkend adres (domeinen, localhost, IP's, poorten, spaties) of anders een zoekopdracht; nette AeroSurf-foutpagina met reden en tips in plaats van een kaal browser-plaatje; AeroTalk-chat in Discord-stijl (groepering, tijdstempels, datum-scheiders, hover, lang drukken = kopiëren); bellen gefixed (cameras van beide kanten en scherm delen werken weer) en de browser heeft nu werkknoppen (terug/vooruit/verversen), nieuwe werkbalk en tabbladen.",
     "updatedAt": "2026-10-06",
     "iosUrl": ""
 }

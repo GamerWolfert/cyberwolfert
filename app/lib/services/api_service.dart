@@ -198,13 +198,19 @@ class ApiService {
   /// Frame-check: kan deze URL ingebed worden ('open'), is proxy nodig
   /// ('blocked') of is hij onbereikbaar ('na')? null bij verbindingsfout.
   Future<String?> frameCheck(String url) async {
+    final j = await frameInfo(url);
+    return j?['framing']?.toString();
+  }
+
+  /// Frame-check met uitleg: {framing, reason?, status?}. null = serverfout.
+  Future<Map<String, dynamic>?> frameInfo(String url) async {
     try {
       final r = await http
           .get(Uri.parse('$base/frame-check?url=${Uri.encodeComponent(url)}'),
               headers: await _h())
           .timeout(const Duration(seconds: 10));
       if (r.statusCode != 200) return null;
-      return (jsonDecode(r.body) as Map<String, dynamic>)['framing']?.toString();
+      return jsonDecode(r.body) as Map<String, dynamic>;
     } catch (_) {
       return null;
     }

@@ -46,9 +46,31 @@ class _GifView extends StatelessWidget {
         child: Image.network(
           url,
           fit: BoxFit.contain,
-          errorBuilder: (_, __, ___) => Text(url,
-              style: const TextStyle(
-                  fontSize: 12, color: Colors.lightBlueAccent, decoration: TextDecoration.underline)),
+          // Nooit een kaal plaatje: nette kaart met link naar de bron.
+          errorBuilder: (_, __, ___) => Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0E140E),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.white12),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.gif_box_outlined,
+                    size: 17, color: Colors.white38),
+                const SizedBox(width: 9),
+                Flexible(
+                  child: Text(
+                    'GIF niet beschikbaar — tik om te openen',
+                    style: TextStyle(
+                        fontSize: 12.5,
+                        color: Colors.white.withValues(alpha: 0.75)),
+                  ),
+                ),
+              ],
+            ),
+          ),
           loadingBuilder: (c, child, p) => p == null
               ? child
               : Container(

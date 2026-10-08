@@ -321,6 +321,8 @@ server.listen(PORT, HOST, () => {
   startSmtp();
   const { startUrlWatch } = require('./url_watch');
   startUrlWatch();
+  const { startDiskWatch } = require('./disk_watch');
+  startDiskWatch();
   const { send, CHANNELS } = require('./discord');
   send(CHANNELS.minipcSysteem, `Backend (her)start op poort ${PORT} — ${new Date().toISOString().slice(0, 19)}Z`);
 });

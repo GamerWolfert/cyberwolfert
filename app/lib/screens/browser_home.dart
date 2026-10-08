@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../config/constants.dart';
 import '../providers/settings_provider.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/cyberwolf_panel.dart';
 import '../widgets/background_menu.dart';
+import '../widgets/browser_handle.dart';
 import '../widgets/browser_view.dart';
 import '../widgets/app_logo.dart';
 import '../widgets/made_by.dart';
@@ -14,6 +16,7 @@ import '../services/update_service.dart';
 import '../services/auto_update.dart';
 import '../services/recent_service.dart';
 import '../services/sound_service.dart';
+import '../services/url_utils.dart';
 import 'downloads_screen.dart';
 import 'login_screen.dart';
 import 'wolfsyn_screen.dart';
@@ -25,6 +28,7 @@ class _Tab {
   static int _nextId = 0;
   final int id = _nextId++;
   String? url;
+  final handle = BrowserHandle(); // terug/vooruit/verversen per tabblad
   _Tab();
   String get title {
     if (url == null) return 'AeroSeek';
@@ -69,13 +73,27 @@ class _BrowserHomeScreenState extends State<BrowserHomeScreen> {
   int _homeToken = 0;
   bool _gateShown = false;
 
-  static final _urlRe = RegExp(r'^(https?://)?[^\s]+\.[a-z]{2,}(/.*)?$', caseSensitive: false);
+  /// Zie [UrlUtils]: alles wat een adres is wordt URL, de rest gezocht.
+  static String? asUrl(String raw) => UrlUtils.asUrl(raw);
 
   _Tab get _tab => _tabs[_active];
 
   void _openUrl(String url) {
-    var u = url.trim();
-    if (!u.startsWith('http')) u = 'https://$u';
+    final raw = url.trim();
+    if (raw.isEmpty) return;
+    final alsUrl = UrlUtils.asUrl(raw);
+    if (alsUrl == null) {
+      // Geen adres -> zoeken, net als in de werkbalk. Zo "werkt" alles.
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+            builder: (_) =>
+                SearchResultsScreen(query: raw, onOpenUrl: _openUrl)),
+      );
+      return;
+    }
+    final u = UrlUtils.normScheme(alsUrl);
     RecentService.add(u);
     setState(() {
       _tab.url = u;
@@ -117,8 +135,9 @@ class _BrowserHomeScreenState extends State<BrowserHomeScreen> {
       _downloadApps();
       return;
     }
-    if (_urlRe.hasMatch(t)) {
-      _openUrl(t);
+    final alsUrl = asUrl(t);
+    if (alsUrl != null) {
+      _openUrl(alsUrl);
       return;
     }
     if (!mounted) return;
@@ -351,11 +370,30 @@ class _BrowserHomeScreenState extends State<BrowserHomeScreen> {
                         controller: _urlCtrl,
                         focusNode: _urlFocus,
                         onSubmitted: _submitBar,
-                        decoration: const InputDecoration(
-                          hintText: 'Voer URL in of zoek via AeroSeek…',
-                          prefixIcon: Icon(Icons.lock_outline, size: 16),
-                          border: OutlineInputBorder(),
+                        textInputAction: TextInputAction.go,
+                        style: const TextStyle(fontSize: 14),
+                        decoration: InputDecoration(
+                          hintText:
+                              'Zoek met AeroSeek of typ een adres…',
+                          hintStyle:
+                              const TextStyle(color: Color(0xFF949BA4)),
+                          prefixIcon: const Icon(Icons.search_rounded,
+                              size: 19, color: Color(0xFF949BA4)),
+                          suffixIcon: IconButton(
+                            tooltip: 'Openen',
+                            icon: const Icon(Icons.arrow_forward_rounded,
+                                size: 18, color: Color(0xFF3CFF5C)),
+                            onPressed: () => _submitBar(_urlCtrl.text),
+                          ),
+                          filled: true,
+                          fillColor: const Color(0xFF0E140E),
                           isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                              vertical: 12, horizontal: 4),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(24),
+                            borderSide: BorderSide.none,
+                          ),
                         ),
                       ),
                     ),
@@ -385,21 +423,59 @@ class _BrowserHomeScreenState extends State<BrowserHomeScreen> {
                     final active = i == _active;
                     return Padding(
                       padding: const EdgeInsets.only(right: 6),
-                      child: InputChip(
-                        selected: active,
-                        showCheckmark: false,
-                        avatar: const AppLogo(size: 18, showName: false),
-                        label: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 140),
-                          child: Text(_tabs[i].title,
-                              maxLines: 1, overflow: TextOverflow.ellipsis),
+                      child: Material(
+                        color: active
+                            ? const Color(0xFF0E140E)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(9),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(9),
+                          onTap: () => _switchTab(i),
+                          child: Container(
+                            height: 34,
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 9),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(9),
+                              border: Border.all(
+                                color: active
+                                    ? const Color(0xFF3CFF5C)
+                                        .withValues(alpha: 0.45)
+                                    : Colors.white10,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                AppLogo(size: 15, showName: false),
+                                const SizedBox(width: 7),
+                                ConstrainedBox(
+                                  constraints:
+                                      const BoxConstraints(maxWidth: 130),
+                                  child: Text(
+                                    _tabs[i].title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                        fontSize: 12.5,
+                                        color: active
+                                            ? Colors.white
+                                            : Colors.white70),
+                                  ),
+                                ),
+                                if (_tabs.length > 1) ...[
+                                  const SizedBox(width: 6),
+                                  InkWell(
+                                    borderRadius: BorderRadius.circular(10),
+                                    onTap: () => _closeTab(i),
+                                    child: const Icon(Icons.close_rounded,
+                                        size: 15, color: Colors.white54),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
                         ),
-                        deleteIcon: _tabs.length > 1
-                            ? const Icon(Icons.close, size: 16)
-                            : null,
-                        onDeleted:
-                            _tabs.length > 1 ? () => _closeTab(i) : null,
-                        onPressed: () => _switchTab(i),
                       ),
                     );
                   },
@@ -567,19 +643,70 @@ class _BrowserHomeScreenState extends State<BrowserHomeScreen> {
   }
 
   Widget _buildWebView(String url, [int? tabIndex]) {
+    final tab = _tabs[tabIndex ?? _active];
     return Column(
       children: [
         Material(
           elevation: 2,
-          child: Row(
-            children: [
-              Expanded(
-                  child: Padding(
-                padding: const EdgeInsets.all(8),
-                child: Text(url, maxLines: 1, overflow: TextOverflow.ellipsis),
-              )),
-              IconButton(icon: const Icon(Icons.close), onPressed: _goHome),
-            ],
+          color: const Color(0xFF080C08),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+            child: Row(
+              children: [
+                IconButton(
+                  tooltip: 'Terug',
+                  icon: const Icon(Icons.arrow_back_rounded, size: 19),
+                  onPressed: tab.handle.back),
+                IconButton(
+                  tooltip: 'Vooruit',
+                  icon: const Icon(Icons.arrow_forward_rounded, size: 19),
+                  onPressed: tab.handle.forward),
+                IconButton(
+                  tooltip: 'Vernieuwen',
+                  icon: const Icon(Icons.refresh_rounded, size: 19),
+                  onPressed: tab.handle.reload),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0E140E),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white10),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.lock_rounded,
+                            size: 13, color: Color(0xFF3CFF5C)),
+                        const SizedBox(width: 7),
+                        Expanded(
+                          child: Text(url,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  fontSize: 12.5, color: Colors.white70)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Extern openen',
+                  icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                  onPressed: () async {
+                    try {
+                      await launchUrl(Uri.parse(url),
+                          mode: LaunchMode.externalApplication);
+                    } catch (_) {}
+                  },
+                ),
+                IconButton(
+                    tooltip: 'Startpagina',
+                    icon: const Icon(Icons.close_rounded, size: 19),
+                    onPressed: _goHome),
+              ],
+            ),
           ),
         ),
         Expanded(
@@ -587,6 +714,7 @@ class _BrowserHomeScreenState extends State<BrowserHomeScreen> {
                 // Stabiele key per tabblad: webview (en geluid) blijft leven
                 key: ValueKey('webview-${tabIndex ?? _active}'),
                 url: url,
+                handle: tab.handle,
                 onClose: _goHome)),
       ],
     );
