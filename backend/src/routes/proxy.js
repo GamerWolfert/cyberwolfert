@@ -10,7 +10,17 @@ const UA = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) CyberWolfe
 
 function isPrivateIp(ip) {
   if (!ip) return true;
-  if (ip.includes(':')) return true;
+  // IPv6: alleen loopback, link-local en ULA zijn prive; de rest (2001:…,
+  // 2606:… enz.) is gewoon publiek — anders vallen alle dual-stack sites
+  // (google, youtube) af als "prive-adres".
+  if (ip.includes(':')) {
+    const v = ip.toLowerCase().replace(/^\[|\]$/g, '');
+    const mapped = v.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/);
+    if (mapped) return isPrivateIp(mapped[1]);
+    if (v === '::1' || v === '::') return true;
+    if (v.startsWith('fe80') || v.startsWith('fc') || v.startsWith('fd')) return true;
+    return false;
+  }
   const p = ip.split('.').map(Number);
   if (p.length !== 4 || p.some((n) => Number.isNaN(n))) return true;
   const [a, b] = p;
@@ -55,11 +65,19 @@ function friendlyReason(msg) {
   return 'Deze pagina is niet bereikbaar.';
 }
 
+function normalize(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return s;
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(s) || s.startsWith('//')) return s;
+  // "localhost:8080/x", "192.168.1.42:43711", "google.com" -> http://…
+  return 'http://' + s;
+}
+
 // frame-check: BEOORDEEL of een adres bruikbaar is (voor de browser).
 // Alles wordt toegestaan, ook LAN-adressen, poorten en localhost — daar
 // deed de vorige versie te streng over en dan weigerde AeroSurf geldige URL's.
 router.get('/frame-check', async (req, res) => {
-  const raw = req.query.url || '';
+  const raw = normalize(req.query.url);
   let u;
   try {
     u = new URL(raw);
@@ -85,12 +103,21 @@ router.get('/frame-check', async (req, res) => {
       xfo.includes('deny') || xfo.includes('sameorigin') ||
       /frame-ancestors[^;]*('none'|[^;]*'self')/.test(csp);
     if (!blocked) return res.json({ framing: 'open', status: r.status });
-    // Framing geblokkeerd: alleen echt verder helpen als de proxy mag.
+    // Framing geblokkeerd: alleen verder helpen als de proxy mag
+    // (publiek, poort 80/443). Anders: bereikbaar, maar niet in te bedden —
+    // dat is NIET hetzelfde als "onbereikbaar".
     const proxyOk = await checkUrl(u.toString());
     if (!proxyOk.ok) {
-      return res.json({ framing: 'na', reason: friendlyReason(proxyOk.error), status: r.status });
+      return res.json({
+        framing: 'blocked',
+        proxy: false,
+        status: r.status,
+        reason:
+          'Deze site laat zich niet in AeroSurf inbedden (hij weigert iframes) en gaat niet via de proxy — '
+          + 'open hem met "Extern openen".',
+      });
     }
-    return res.json({ framing: 'blocked', status: r.status });
+    return res.json({ framing: 'blocked', proxy: true, status: r.status });
   } catch (e) {
     const reason =
       e && e.name === 'AbortError'
@@ -101,7 +128,7 @@ router.get('/frame-check', async (req, res) => {
 });
 
 router.get('/proxy', async (req, res) => {
-  const c = await checkUrl(req.query.url || '');
+  const c = await checkUrl(normalize(req.query.url));
   if (!c.ok) return res.status(400).json({ error: c.error });
   try {
     const ctl = new AbortController();

@@ -251,12 +251,20 @@ class _BrowserViewState extends State<BrowserView> {
                 (j['reason']?.toString()) ?? 'Deze pagina is niet bereikbaar.');
           }
         } else if (j['framing'] == 'blocked') {
-          if (mounted) {
-            setState(() {
-              _viaProxy = true;
-              _embedUrl =
-                  '$origin/api/proxy?url=${Uri.encodeComponent(url)}';
-            });
+          if (j['proxy'] == false) {
+            // Bereikbaar, maar niet in te bedden en niet te proxy'en.
+            if (mounted) {
+              setState(() => _webError = (j['reason']?.toString()) ??
+                  'Deze site weigert inbedden in AeroSurf.');
+            }
+          } else {
+            if (mounted) {
+              setState(() {
+                _viaProxy = true;
+                _embedUrl =
+                    '$origin/api/proxy?url=${Uri.encodeComponent(url)}';
+              });
+            }
           }
         }
       }
